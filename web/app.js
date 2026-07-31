@@ -3,6 +3,17 @@ import { MicrophoneReactiveController, microphoneErrorMessage, microphoneSupport
 
 const defaultAdapter = LIGHTSTICK_ADAPTERS[0];
 const FACTORY_PALETTE_STORAGE_KEY = "candybong-factory-palette-v1";
+const FACTORY_MEMBER_PALETTE = Object.freeze({
+  0x00: "Dahyun",
+  0x01: "Chaeyoung",
+  0x02: "Jihyo",
+  0x09: "Jeongyeon",
+  0x0b: "Mina",
+  0x0e: "Nayeon",
+  0x14: "Tzuyu",
+  0x16: "Sana",
+  0x1b: "Momo",
+});
 const MAX_DIAGNOSTIC_ENTRIES = 100;
 const MUSIC_WRITE_INTERVAL_MS = 125;
 const MUSIC_DIAGNOSTIC_INTERVAL_MS = 1000;
@@ -381,8 +392,18 @@ function factoryIndexHex(index) {
   return index.toString(16).padStart(2, "0").toUpperCase();
 }
 
-function factoryEntry(index) {
+function storedFactoryEntry(index) {
   return state.factoryPalette[String(index)] || {};
+}
+
+function factoryEntry(index) {
+  const storedEntry = storedFactoryEntry(index);
+  const provisionalLabel = FACTORY_MEMBER_PALETTE[index] || "";
+  return {
+    tested: storedEntry.tested === true,
+    label: storedEntry.label || provisionalLabel,
+    provisional: !storedEntry.label && Boolean(provisionalLabel),
+  };
 }
 
 function loadFactoryPalette() {
@@ -426,7 +447,10 @@ function renderFactoryPalette() {
     button.classList.toggle("tested", entry.tested === true);
     button.dataset.factoryIndex = String(index);
     button.setAttribute("aria-pressed", String(index === state.selectedFactoryIndex));
-    button.setAttribute("aria-label", `Factory color ${factoryIndexHex(index)}${entry.label ? `, ${entry.label}` : ""}`);
+    button.setAttribute(
+      "aria-label",
+      `Factory color ${factoryIndexHex(index)}${entry.label ? `, ${entry.label}${entry.provisional ? ", provisional mapping" : ""}` : ""}`,
+    );
 
     const code = document.createElement("code");
     code.textContent = factoryIndexHex(index);
@@ -444,7 +468,9 @@ function updateFactorySelection() {
   const index = state.selectedFactoryIndex;
   const entry = factoryEntry(index);
   const hex = factoryIndexHex(index);
-  elements.factorySelectionName.textContent = entry.label ? `Index ${hex} · ${entry.label}` : `Index ${hex}`;
+  elements.factorySelectionName.textContent = entry.label
+    ? `Index ${hex} · ${entry.label}${entry.provisional ? " (provisional)" : ""}`
+    : `Index ${hex}`;
   elements.factoryPacketPreview.textContent = packetLabel(activeAdapter().commands.factoryColor(index)).toUpperCase();
   elements.factoryColorLabel.value = entry.label || "";
   elements.testFactoryColorButton.textContent = `Test index ${hex}`;
@@ -974,8 +1000,8 @@ elements.testFactoryColorButton.addEventListener("click", async () => {
   const label = `Factory color ${factoryIndexHex(index)}`;
 
   if (await sendPacket(state.adapter.commands.factoryColor(index), label)) {
-    const entry = factoryEntry(index);
-    state.factoryPalette[String(index)] = { ...entry, tested: true };
+    const storedEntry = storedFactoryEntry(index);
+    state.factoryPalette[String(index)] = { tested: true, label: storedEntry.label || "" };
     saveFactoryPalette();
     state.activeScene = null;
     state.activeCustomAnimation = null;
@@ -1005,8 +1031,9 @@ elements.saveFactoryLabelButton.addEventListener("click", () => {
 
 elements.clearFactoryResultButton.addEventListener("click", () => {
   const index = state.selectedFactoryIndex;
-  if (!factoryEntry(index).tested && !factoryEntry(index).label) {
-    showToast("This index has no saved result");
+  const storedEntry = storedFactoryEntry(index);
+  if (!storedEntry.tested && !storedEntry.label) {
+    showToast(FACTORY_MEMBER_PALETTE[index] ? "Only the provisional mapping is set" : "This index has no saved result");
     return;
   }
 

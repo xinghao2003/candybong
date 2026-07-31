@@ -33,7 +33,7 @@ The custom animation builder exposes all currently documented animation families
 
 Solid-color brightness is a separate 0–10 value. Displayed colors can differ from the selected RGB value because the LEDs have a smaller real-world gamut than the mathematical RGB color space.
 
-The Factory Palette Lab sends the device-defined color command `ff 15 00 II`, where `II` ranges from `00` through `1b`. The 28 colors have not been mapped to trustworthy names, so the lab lets a user test each physical result and save an observed label in browser local storage under `candybong-factory-palette-v1`.
+The Factory Palette Lab sends the device-defined color command `ff 15 00 II`, where `II` ranges from `00` through `1b`. Nine physically observed member-color candidates are included as provisional labels: Dahyun `00`, Chaeyoung `01`, Jihyo `02`, Jeongyeon `09`, Mina `0b`, Nayeon `0e`, Tzuyu `14`, Sana `16`, and Momo `1b`. These are not an official firmware mapping and can be confirmed or replaced in the lab. User observations are saved in browser local storage under `candybong-factory-palette-v1` and take precedence over the provisional labels.
 
 The optional Diagnostics panel records transmitted command bytes and listens for responses on Nordic UART characteristic `6e400003-b5a3-f393-e0a9-e50e24dcca9e`. Notification setup is non-fatal: if the response endpoint is absent or does not support notifications, normal command control remains available and the panel reports RX as unavailable.
 
