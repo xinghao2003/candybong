@@ -147,6 +147,82 @@
         </div>
       </section>
 
+      <section class="panel music-panel" aria-labelledby="musicTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="section-label">MUSIC REACTIVE</p>
+            <h2 id="musicTitle">Animate from your microphone</h2>
+          </div>
+          <span class="music-local-badge">LOCAL AUDIO</span>
+        </div>
+
+        <div class="music-layout">
+          <div class="music-controls">
+            <p class="music-description">Play music through a nearby speaker. The browser analyzes the microphone locally and sends only light commands to the Candybong.</p>
+
+            <label class="field-label" for="musicMode">
+              <span>Reactive effect</span>
+              <select class="select-control" id="musicMode">
+                <option value="pulse">Volume pulse</option>
+                <option value="beat">Bass beat flash</option>
+                <option value="spectrum">Spectrum color</option>
+              </select>
+            </label>
+
+            <div class="parameter-field">
+              <div class="parameter-heading">
+                <label for="musicSensitivityInput">Microphone sensitivity</label>
+                <output id="musicSensitivityValue" for="musicSensitivityInput">5 / 10</output>
+              </div>
+              <input class="range" id="musicSensitivityInput" type="range" min="1" max="10" value="5" />
+            </div>
+
+            <div class="parameter-field">
+              <div class="parameter-heading">
+                <label for="musicBrightnessInput">Maximum brightness</label>
+                <output id="musicBrightnessValue" for="musicBrightnessInput">10 / 10</output>
+              </div>
+              <input class="range" id="musicBrightnessInput" type="range" min="1" max="10" value="10" />
+            </div>
+
+            <div class="music-actions">
+              <button class="button button-primary" id="startMusicButton" type="button" disabled>Start listening</button>
+              <button class="button button-secondary" id="stopMusicButton" type="button" disabled>Stop</button>
+            </div>
+            <p class="music-note" id="musicNote">Volume pulse and bass beat use your selected solid color. Keep this page in the foreground while listening.</p>
+          </div>
+
+          <aside class="music-monitor" aria-live="polite">
+            <div class="music-status-row">
+              <span class="music-status-dot" id="musicStatusDot" aria-hidden="true"></span>
+              <div>
+                <strong id="musicStatus">Connect your Candybong</strong>
+                <span id="musicStatusDetail">Microphone is idle</span>
+              </div>
+            </div>
+
+            <div class="music-meter-group">
+              <div class="music-meter-heading"><span>Input level</span><output id="musicLevelValue">0%</output></div>
+              <div class="music-meter" role="meter" aria-label="Microphone input level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="musicLevelMeter">
+                <span id="musicLevelFill"></span>
+              </div>
+            </div>
+
+            <div class="music-meter-group">
+              <div class="music-meter-heading"><span>Bass energy</span><output id="musicBassValue">0%</output></div>
+              <div class="music-meter bass-meter" role="meter" aria-label="Bass energy" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="musicBassMeter">
+                <span id="musicBassFill"></span>
+              </div>
+            </div>
+
+            <div class="beat-indicator" id="musicBeatIndicator">
+              <span aria-hidden="true"></span>
+              <div><strong>Beat detector</strong><small>Waiting for audio</small></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
       <section class="panel custom-animation-panel" aria-labelledby="customAnimationTitle">
         <div class="panel-heading">
           <div>

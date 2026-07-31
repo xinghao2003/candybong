@@ -255,6 +255,36 @@ h2 { margin: 5px 0 0; font-size: 18px; line-height: 1.25; letter-spacing: -0.02e
 .effect-check { display: none; margin-left: auto; color: var(--pink-dark); font-weight: 900; }
 .effect-button.active .effect-check { display: block; }
 
+.music-panel { margin-bottom: 16px; }
+.music-local-badge { padding: 6px 9px; border-radius: 999px; background: #eaf8f1; color: var(--success); font-size: 9px; font-weight: 850; letter-spacing: 0.08em; }
+.music-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr); gap: 20px; }
+.music-controls { display: grid; align-content: start; gap: 16px; }
+.music-description { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.music-actions { display: flex; gap: 9px; }
+.music-actions .button:first-child { flex: 1 1 auto; }
+.music-note { margin: -5px 0 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
+.music-monitor { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-soft); }
+.music-status-row { display: flex; align-items: center; gap: 11px; padding-bottom: 15px; border-bottom: 1px solid var(--line); }
+.music-status-row strong, .music-status-row span { display: block; }
+.music-status-row strong { font-size: 12px; }
+.music-status-row div > span { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.music-status-dot { flex: 0 0 auto; width: 11px; height: 11px; border-radius: 50%; background: #aaa2aa; box-shadow: 0 0 0 5px rgba(113, 104, 113, 0.08); }
+.music-status-dot.starting { background: #d89420; box-shadow: 0 0 0 5px rgba(216, 148, 32, 0.12); animation: status-pulse 1s ease-in-out infinite; }
+.music-status-dot.listening { background: var(--success); box-shadow: 0 0 0 5px rgba(22, 133, 82, 0.12); }
+.music-status-dot.error { background: #cf3654; box-shadow: 0 0 0 5px rgba(207, 54, 84, 0.1); }
+.music-meter-group { margin-top: 15px; }
+.music-meter-heading { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; color: var(--muted); font-size: 9px; }
+.music-meter-heading output { color: var(--text); font-weight: 800; }
+.music-meter { height: 9px; overflow: hidden; border-radius: 99px; background: #e7e1e6; }
+.music-meter span { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ff94bf, var(--pink)); transition: width 80ms linear; }
+.music-meter.bass-meter span { background: linear-gradient(90deg, #8b6cff, #38c8ff); }
+.beat-indicator { display: flex; align-items: center; gap: 10px; margin-top: 17px; padding: 11px 12px; border-radius: 11px; background: #f1edf1; }
+.beat-indicator > span { flex: 0 0 auto; width: 28px; height: 28px; border: 6px solid #fff; border-radius: 50%; background: #c7bec5; box-shadow: 0 0 0 1px var(--line); transition: background 80ms ease, box-shadow 80ms ease, transform 80ms ease; }
+.beat-indicator.detected > span { background: var(--pink); box-shadow: 0 0 0 1px var(--line), 0 0 18px rgba(239, 79, 145, 0.55); transform: scale(1.12); }
+.beat-indicator strong, .beat-indicator small { display: block; }
+.beat-indicator strong { font-size: 10px; }
+.beat-indicator small { margin-top: 2px; color: var(--muted); font-size: 8px; }
+
 .custom-animation-panel { margin-bottom: 16px; }
 .custom-animation-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr); gap: 20px; }
 .animation-controls { display: grid; align-content: start; gap: 16px; }
@@ -363,6 +393,7 @@ footer { color: #978f97; font-size: 10px; text-align: center; }
   .controller-layout { grid-template-columns: 1fr; }
   .light-preview { min-height: 220px; }
   .effect-grid { grid-template-columns: 1fr 1fr; }
+  .music-layout { grid-template-columns: 1fr; }
   .custom-animation-layout { grid-template-columns: 1fr; }
   .factory-palette-grid { grid-template-columns: repeat(4, 1fr); }
   .factory-editor { grid-template-columns: 1fr; align-items: stretch; }
@@ -381,6 +412,8 @@ footer { color: #978f97; font-size: 10px; text-align: center; }
   .effect-grid { grid-template-columns: 1fr; }
   .helper-text { display: none; }
   .effect-button { min-height: 66px; }
+  .music-local-badge { display: none; }
+  .music-actions { display: grid; grid-template-columns: 1fr 0.7fr; }
   .tool-panel > summary { padding: 14px 16px; }
   .tool-panel-content { padding: 16px; }
   .tool-status { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

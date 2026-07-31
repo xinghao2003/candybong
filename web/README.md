@@ -11,6 +11,18 @@ Open `index.html` in Chrome on Android over HTTPS or localhost. On iPhone/iPad, 
 
 The animated effects use the firmware's full extended opcodes. In particular, color fade commands are `ff e2 00 RR GG BB SS` (faster fade) and `ff e3 00 RR GG BB SS` (slower fade). Pink Glow, Ocean Pulse, and White Pulse all send an animated fade command rather than a static color command.
 
+## Music Reactive mode
+
+Music Reactive mode uses the browser microphone and Web Audio API; it does not require Spotify or upload audio anywhere. Connect the Candybong, choose an effect, tap **Start listening**, and allow microphone access. Play music through a nearby speaker while keeping the controller page in the foreground.
+
+- Volume pulse maps the live input level to brightness using the selected solid color.
+- Bass beat flash detects short low-frequency peaks and flashes the selected solid color.
+- Spectrum color maps low, mid, and high frequency energy to red, green, and blue.
+
+Sensitivity changes how strongly quiet audio reacts, while maximum brightness caps the light output. Reactive packets are rate-limited to eight writes per second, duplicate frames are skipped, and diagnostics sample at most one reactive packet per second so the log remains useful. A manual power, color, effect, or factory-palette command stops microphone mode before writing, preventing concurrent Bluetooth commands.
+
+Microphone limitations still apply: headphones and the phone's internal app audio cannot be captured directly, and browser echo cancellation may affect music played from the same phone. A separate speaker or music device works best. Microphone capture requires HTTPS or localhost just like Web Bluetooth, and support in iOS Web Bluetooth browsers such as Bluefy should be verified on the target device.
+
 The custom animation builder exposes all currently documented animation families with mode-specific limits:
 
 - RGB blink (`e1`), pulse (`e2`), and slow pulse (`e3`) accept any 24-bit RGB color. Each channel ranges from 0 to 255, for 16,777,216 theoretical combinations.
