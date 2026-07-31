@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#fff7fa" />
+    <meta name="description" content="Control a TWICE Candybong Infinity over Bluetooth." />
+    <title>Candybong Controller</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Candybong Controller home">
+          <span class="brand-mark" aria-hidden="true">C</span>
+          <span>Candybong Controller</span>
+        </a>
+        <div class="connection-status" aria-live="polite">
+          <span class="connection-dot" id="connectionDot" aria-hidden="true"></span>
+          <span id="connectionLabel">Disconnected</span>
+        </div>
+      </header>
+
+      <section class="intro" aria-labelledby="pageTitle">
+        <p class="eyebrow">TWICE CANDYBONG INFINITY</p>
+        <h1 id="pageTitle">Simple lightstick control.</h1>
+        <p>Connect once, then choose a solid color or an animated effect.</p>
+      </section>
+
+      <section class="connection-panel" aria-labelledby="connectionTitle">
+        <div class="connection-icon" aria-hidden="true">B</div>
+        <div class="connection-copy">
+          <h2 id="connectionTitle">Connect your lightstick</h2>
+          <p id="connectionMessage">Turn on your Candybong and keep it nearby.</p>
+          <p class="support-note" id="supportNote">Checking browser support…</p>
+        </div>
+        <button class="button button-primary connect-button" id="connectButton" type="button">Connect Bluetooth</button>
+      </section>
+
+      <div class="controller-layout">
+        <section class="panel preview-panel" aria-labelledby="previewTitle">
+          <div class="panel-heading compact-heading">
+            <div>
+              <p class="section-label">PREVIEW</p>
+              <h2 id="previewTitle">Current light</h2>
+            </div>
+            <span class="mode-badge" id="previewMode">Solid</span>
+          </div>
+
+          <div class="light-preview" id="lightstickVisual" data-effect="solid" style="--light-color: #ff5fa2; --light-alpha: 1">
+            <div class="preview-glow" aria-hidden="true"></div>
+            <div class="preview-disc" aria-hidden="true">
+              <span>TWICE</span>
+            </div>
+          </div>
+
+          <div class="preview-details">
+            <div>
+              <strong id="previewName">Candy pink</strong>
+              <span id="previewDescription">Solid color · brightness 10</span>
+            </div>
+            <code id="hexValue">#FF5FA2</code>
+          </div>
+
+          <div class="command-status" aria-live="polite">
+            <span class="command-dot" aria-hidden="true"></span>
+            <span id="lastCommand">No command sent yet</span>
+          </div>
+        </section>
+
+        <div class="control-stack">
+          <section class="panel" aria-labelledby="powerTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="section-label">POWER</p>
+                <h2 id="powerTitle">Lightstick power</h2>
+              </div>
+            </div>
+            <div class="power-grid">
+              <button class="button button-dark button-large" id="onButton" type="button" disabled>Turn on</button>
+              <button class="button button-secondary button-large" id="offButton" type="button" disabled>Turn off</button>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="colorTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="section-label">SOLID COLOR</p>
+                <h2 id="colorTitle">Color and brightness</h2>
+              </div>
+              <label class="color-picker" aria-label="Choose a custom color">
+                <input id="colorInput" type="color" value="#ff5fa2" />
+                <span class="color-picker-swatch" id="colorSwatch"></span>
+              </label>
+            </div>
+
+            <div class="preset-colors" aria-label="Quick colors">
+              <button class="color-preset active" type="button" data-color="#ff5fa2" aria-label="Candy pink" style="--preset: #ff5fa2"></button>
+              <button class="color-preset" type="button" data-color="#ff4068" aria-label="Red" style="--preset: #ff4068"></button>
+              <button class="color-preset" type="button" data-color="#38c8ff" aria-label="Ocean blue" style="--preset: #38c8ff"></button>
+              <button class="color-preset" type="button" data-color="#8b6cff" aria-label="Purple" style="--preset: #8b6cff"></button>
+              <button class="color-preset" type="button" data-color="#5de2a5" aria-label="Mint" style="--preset: #5de2a5"></button>
+              <button class="color-preset light-preset" type="button" data-color="#ffffff" aria-label="White" style="--preset: #ffffff"></button>
+            </div>
+
+            <div class="brightness-row">
+              <label for="brightnessInput">Brightness</label>
+              <output id="brightnessValue" for="brightnessInput">10 / 10</output>
+            </div>
+            <input class="range" id="brightnessInput" type="range" min="0" max="10" value="10" />
+
+            <button class="button button-primary button-wide" id="applyColorButton" type="button" disabled>Apply solid color</button>
+          </section>
+        </div>
+      </div>
+
+      <section class="panel effects-panel" aria-labelledby="effectsTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="section-label">ANIMATED EFFECTS</p>
+            <h2 id="effectsTitle">Choose an effect</h2>
+          </div>
+          <span class="helper-text">Tap to apply immediately</span>
+        </div>
+
+        <div class="effect-grid">
+          <button class="effect-button" data-scene="pink" type="button" disabled>
+            <span class="effect-swatch pink-effect" aria-hidden="true"></span>
+            <span class="effect-copy"><strong>Pink glow</strong><small>Gentle pink fade</small></span>
+            <span class="effect-check" aria-hidden="true">✓</span>
+          </button>
+          <button class="effect-button" data-scene="ocean" type="button" disabled>
+            <span class="effect-swatch ocean-effect" aria-hidden="true"></span>
+            <span class="effect-copy"><strong>Ocean pulse</strong><small>Blue fade in and out</small></span>
+            <span class="effect-check" aria-hidden="true">✓</span>
+          </button>
+          <button class="effect-button" data-scene="white" type="button" disabled>
+            <span class="effect-swatch white-effect" aria-hidden="true"></span>
+            <span class="effect-copy"><strong>White pulse</strong><small>Slow white fade</small></span>
+            <span class="effect-check" aria-hidden="true">✓</span>
+          </button>
+          <button class="effect-button" data-scene="rainbow" type="button" disabled>
+            <span class="effect-swatch rainbow-effect" aria-hidden="true"></span>
+            <span class="effect-copy"><strong>Rainbow spin</strong><small>Rotating colors</small></span>
+            <span class="effect-check" aria-hidden="true">✓</span>
+          </button>
+        </div>
+      </section>
+
+      <details class="help-panel">
+        <summary>Connection help</summary>
+        <div>
+          <p>Use Chrome on Android or a Web Bluetooth browser such as Bluefy on iPhone/iPad. The page must be opened through HTTPS or localhost.</p>
+          <p>If connection fails, keep the lightstick awake, move it close to your phone, and try again.</p>
+        </div>
+      </details>
+
+      <footer>Nordic UART BLE controller</footer>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
