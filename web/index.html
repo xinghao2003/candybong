@@ -240,6 +240,57 @@
         </div>
       </section>
 
+      <details class="tool-panel" id="factoryPalettePanel">
+        <summary>
+          <span>
+            <span class="section-label">FACTORY PALETTE LAB</span>
+            <strong>Test and label 28 device colors</strong>
+          </span>
+          <span class="tool-status" id="factoryPaletteProgress">0 / 28 tested</span>
+        </summary>
+        <div class="tool-panel-content">
+          <p class="tool-description">These colors are generated inside the Candybong and their official names are unknown. Select an index, send it to the lightstick, then record what you observe.</p>
+
+          <div class="factory-palette-grid" id="factoryPaletteGrid" aria-label="Factory color indices"></div>
+
+          <div class="factory-editor">
+            <div class="factory-selection">
+              <span>Selected factory color</span>
+              <strong id="factorySelectionName">Index 00</strong>
+              <code id="factoryPacketPreview">FF 15 00 00</code>
+            </div>
+            <label class="field-label" for="factoryColorLabel">
+              <span>Observed color label</span>
+              <input class="text-control" id="factoryColorLabel" type="text" maxlength="32" placeholder="Example: warm white" autocomplete="off" />
+            </label>
+            <div class="factory-actions">
+              <button class="button button-primary" id="testFactoryColorButton" type="button" disabled>Test index 00</button>
+              <button class="button button-secondary" id="saveFactoryLabelButton" type="button">Save label</button>
+              <button class="button button-secondary" id="clearFactoryResultButton" type="button">Clear result</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="tool-panel diagnostics-panel" id="diagnosticsPanel">
+        <summary>
+          <span>
+            <span class="section-label">DIAGNOSTICS</span>
+            <strong>Packet and response log</strong>
+          </span>
+          <span class="tool-status" id="responseStatus">Not connected</span>
+        </summary>
+        <div class="tool-panel-content">
+          <div class="diagnostics-toolbar">
+            <p class="tool-description">TX shows commands sent by this page. RX shows notifications received from the Nordic UART response endpoint.</p>
+            <button class="button button-secondary button-small" id="clearDiagnosticsButton" type="button">Clear log</button>
+          </div>
+          <ol class="diagnostic-log" id="diagnosticLog" aria-live="polite">
+            <li class="diagnostic-empty" id="diagnosticEmpty">No packets recorded yet.</li>
+          </ol>
+        </div>
+      </details>
+
       <details class="help-panel">
         <summary>Connection help</summary>
         <div>

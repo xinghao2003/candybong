@@ -1,5 +1,6 @@
 const CANDYBONG_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 const CANDYBONG_COMMAND = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+const CANDYBONG_RESPONSE = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
 function hexToRgb(hex) {
   if (!/^#[0-9a-f]{6}$/i.test(hex)) throw new RangeError("Color must be a six-digit hex value");
@@ -60,6 +61,10 @@ function twiceColorShift(shift) {
   return new Uint8Array([0xff, 0x13, 0x00, integerInRange(shift, 1, 255, "Color shift")]);
 }
 
+function factoryColor(index) {
+  return new Uint8Array([0xff, 0x15, 0x00, integerInRange(index, 0, 27, "Factory color index")]);
+}
+
 export const LIGHTSTICK_ADAPTERS = [
   {
     id: "twice-candybong-infinity",
@@ -67,6 +72,7 @@ export const LIGHTSTICK_ADAPTERS = [
     namePrefixes: ["TWICE LightStick"],
     serviceUuid: CANDYBONG_SERVICE,
     commandUuid: CANDYBONG_COMMAND,
+    responseUuid: CANDYBONG_RESPONSE,
     customAnimations: {
       blink: {
         name: "Color blink",
@@ -162,6 +168,7 @@ export const LIGHTSTICK_ADAPTERS = [
       powerOn: () => new Uint8Array([0xff, 0x11]),
       powerOff: () => new Uint8Array([0xff, 0x12]),
       staticColor,
+      factoryColor,
     },
   },
 ];
