@@ -186,6 +186,10 @@ h2 { margin: 5px 0 0; font-size: 18px; line-height: 1.25; letter-spacing: -0.02e
 .light-preview[data-effect="pulse-slow"] .preview-disc { animation: light-pulse 2.6s ease-in-out infinite; }
 .light-preview[data-effect="rainbow"] .preview-glow,
 .light-preview[data-effect="rainbow"] .preview-disc { animation: rainbow-spin 2.8s linear infinite; }
+.light-preview[data-effect="blink"] .preview-glow,
+.light-preview[data-effect="blink"] .preview-disc { animation: light-blink 1.1s steps(1, end) infinite; }
+.light-preview[data-effect="rainbow-pulse"] .preview-glow,
+.light-preview[data-effect="rainbow-pulse"] .preview-disc { animation: rainbow-pulse 1.7s ease-in-out infinite; }
 
 @keyframes light-pulse {
   0%, 100% { opacity: 0.32; transform: scale(0.92); }
@@ -194,6 +198,16 @@ h2 { margin: 5px 0 0; font-size: 18px; line-height: 1.25; letter-spacing: -0.02e
 
 @keyframes rainbow-spin {
   to { filter: hue-rotate(360deg); }
+}
+
+@keyframes light-blink {
+  0%, 48% { opacity: 1; }
+  49%, 100% { opacity: 0.12; }
+}
+
+@keyframes rainbow-pulse {
+  0%, 100% { filter: hue-rotate(0deg); opacity: 0.3; transform: scale(0.92); }
+  50% { filter: hue-rotate(180deg); opacity: 1; transform: scale(1); }
 }
 
 .preview-details { justify-content: space-between; gap: 16px; margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
@@ -241,6 +255,42 @@ h2 { margin: 5px 0 0; font-size: 18px; line-height: 1.25; letter-spacing: -0.02e
 .effect-check { display: none; margin-left: auto; color: var(--pink-dark); font-weight: 900; }
 .effect-button.active .effect-check { display: block; }
 
+.custom-animation-panel { margin-bottom: 16px; }
+.custom-animation-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr); gap: 20px; }
+.animation-controls { display: grid; align-content: start; gap: 16px; }
+.field-label { display: grid; gap: 7px; color: var(--text); font-size: 11px; font-weight: 750; }
+.select-control { width: 100%; min-height: 46px; padding: 0 40px 0 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); color: var(--text); font-size: 13px; cursor: pointer; }
+.animation-color-field { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 58px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-soft); }
+.field-title, .animation-color-field small { display: block; }
+.field-title { font-size: 11px; font-weight: 750; }
+.animation-color-field small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.inline-color-picker { position: relative; display: flex; align-items: center; gap: 9px; cursor: pointer; }
+.inline-color-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.inline-color-swatch { width: 32px; height: 32px; border: 4px solid #fff; border-radius: 50%; background: var(--pink); box-shadow: 0 0 0 1px var(--line); }
+.inline-color-picker code { min-width: 60px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; }
+.parameter-field[hidden], .animation-color-field[hidden] { display: none; }
+.parameter-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 4px; color: var(--muted); font-size: 11px; }
+.parameter-heading output { color: var(--text); font-weight: 800; }
+.parameter-field .range { margin-bottom: 0; }
+.animation-summary { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-soft); }
+.summary-heading { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.summary-swatch { flex: 0 0 42px; width: 42px; height: 42px; border: 6px solid #fff; border-radius: 50%; background: var(--pink); box-shadow: 0 0 0 1px var(--line), 0 0 18px color-mix(in srgb, var(--summary-color, var(--pink)) 45%, transparent); }
+.summary-swatch[data-effect="blink"] { animation: light-blink 1.1s steps(1, end) infinite; }
+.summary-swatch[data-effect="pulse"] { animation: light-pulse 1.6s ease-in-out infinite; }
+.summary-swatch[data-effect="pulse-slow"] { animation: light-pulse 2.6s ease-in-out infinite; }
+.summary-swatch[data-effect="rainbow"] { animation: rainbow-spin 2.8s linear infinite; }
+.summary-swatch[data-effect="rainbow-pulse"] { animation: rainbow-pulse 1.7s ease-in-out infinite; }
+.summary-heading strong { display: block; font-size: 13px; }
+.summary-heading p { margin: 3px 0 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
+.packet-preview { margin: 14px 0; padding: 11px 12px; border-radius: 10px; background: #f1edf1; }
+.packet-preview span, .packet-preview code { display: block; }
+.packet-preview span { margin-bottom: 5px; color: var(--muted); font-size: 9px; font-weight: 750; text-transform: uppercase; letter-spacing: 0.08em; }
+.packet-preview code { overflow-wrap: anywhere; color: var(--text); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; line-height: 1.45; }
+.protocol-limits { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0; }
+.protocol-limits div { min-width: 0; }
+.protocol-limits dt { color: var(--muted); font-size: 9px; }
+.protocol-limits dd { margin: 2px 0 0; font-size: 11px; font-weight: 800; }
+
 .help-panel { margin-bottom: 16px; padding: 17px 18px; }
 .help-panel summary { cursor: pointer; font-size: 12px; font-weight: 800; }
 .help-panel > div { padding-top: 12px; color: var(--muted); font-size: 11px; line-height: 1.55; }
@@ -255,6 +305,8 @@ footer { color: #978f97; font-size: 10px; text-align: center; }
 .effect-button:focus-visible,
 .color-preset:focus-visible,
 .color-picker:focus-within,
+.inline-color-picker:focus-within,
+.select-control:focus-visible,
 .range:focus-visible,
 .help-panel summary:focus-visible {
   outline: 3px solid rgba(239, 79, 145, 0.28);
@@ -266,6 +318,7 @@ footer { color: #978f97; font-size: 10px; text-align: center; }
   .controller-layout { grid-template-columns: 1fr; }
   .light-preview { min-height: 220px; }
   .effect-grid { grid-template-columns: 1fr 1fr; }
+  .custom-animation-layout { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 520px) {

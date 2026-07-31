@@ -147,6 +147,99 @@
         </div>
       </section>
 
+      <section class="panel custom-animation-panel" aria-labelledby="customAnimationTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="section-label">CUSTOM ANIMATION</p>
+            <h2 id="customAnimationTitle">Build your own effect</h2>
+          </div>
+          <span class="helper-text">Protocol-safe controls</span>
+        </div>
+
+        <div class="custom-animation-layout">
+          <div class="animation-controls">
+            <label class="field-label" for="animationMode">
+              <span>Animation type</span>
+              <select class="select-control" id="animationMode">
+                <option value="blink">Color blink</option>
+                <option value="pulse" selected>Color pulse</option>
+                <option value="slowPulse">Slow color pulse</option>
+                <option value="randomBlink">Random-color blink</option>
+                <option value="hueSpin">Hue rotation</option>
+                <option value="builtIn">Built-in animation</option>
+                <option value="twiceShift">TWICE color shift · experimental</option>
+              </select>
+            </label>
+
+            <div class="animation-color-field" id="animationColorField">
+              <div>
+                <span class="field-title">Animation color</span>
+                <small>Full 24-bit RGB</small>
+              </div>
+              <label class="inline-color-picker" aria-label="Choose animation color">
+                <input id="animationColorInput" type="color" value="#ff5fa2" />
+                <span class="inline-color-swatch" id="animationColorSwatch"></span>
+                <code id="animationColorValue">#FF5FA2</code>
+              </label>
+            </div>
+
+            <div class="parameter-field" id="animationSpeedField">
+              <div class="parameter-heading">
+                <label for="animationSpeedInput">Speed value</label>
+                <output id="animationSpeedValue" for="animationSpeedInput">14 / 255</output>
+              </div>
+              <input class="range" id="animationSpeedInput" type="range" min="0" max="255" value="14" />
+            </div>
+
+            <div class="parameter-field" id="animationHueField" hidden>
+              <div class="parameter-heading">
+                <label for="animationHueInput">Starting hue</label>
+                <output id="animationHueValue" for="animationHueInput">16 / 255</output>
+              </div>
+              <input class="range" id="animationHueInput" type="range" min="0" max="255" value="16" />
+            </div>
+
+            <div class="parameter-field" id="animationIdField" hidden>
+              <div class="parameter-heading">
+                <label for="animationIdInput">Built-in animation ID</label>
+                <output id="animationIdValue" for="animationIdInput">1 / 9</output>
+              </div>
+              <input class="range" id="animationIdInput" type="range" min="1" max="9" value="1" />
+            </div>
+
+            <div class="parameter-field" id="colorShiftField" hidden>
+              <div class="parameter-heading">
+                <label for="colorShiftInput">Color-shift value</label>
+                <output id="colorShiftValue" for="colorShiftInput">16 / 255</output>
+              </div>
+              <input class="range" id="colorShiftInput" type="range" min="1" max="255" value="16" />
+            </div>
+
+            <button class="button button-primary button-wide" id="applyAnimationButton" type="button" disabled>Apply custom animation</button>
+          </div>
+
+          <aside class="animation-summary" aria-live="polite">
+            <div class="summary-heading">
+              <span class="summary-swatch" id="animationSummarySwatch" aria-hidden="true"></span>
+              <div>
+                <strong id="animationSummaryName">Color pulse</strong>
+                <p id="animationSummaryDescription">Fade any RGB color in and out</p>
+              </div>
+            </div>
+            <div class="packet-preview">
+              <span>Packet preview</span>
+              <code id="animationPacketPreview">FF E2 00 FF 5F A2 0E</code>
+            </div>
+            <dl class="protocol-limits">
+              <div><dt>RGB range</dt><dd>0–255 each</dd></div>
+              <div><dt>RGB colors</dt><dd>16,777,216</dd></div>
+              <div><dt>Solid brightness</dt><dd>0–10</dd></div>
+              <div><dt>Built-in patterns</dt><dd>1–9</dd></div>
+            </dl>
+          </aside>
+        </div>
+      </section>
+
       <details class="help-panel">
         <summary>Connection help</summary>
         <div>

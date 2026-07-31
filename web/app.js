@@ -1,4 +1,17 @@
-import { adapterForDevice, bluetoothRequestOptions } from "./adapters.js";
+import { LIGHTSTICK_ADAPTERS, adapterForDevice, bluetoothRequestOptions } from "./adapters.js";
+
+const defaultAdapter = LIGHTSTICK_ADAPTERS[0];
+const animationSettings = Object.fromEntries(
+  Object.entries(defaultAdapter.customAnimations).map(([mode, definition]) => [
+    mode,
+    {
+      speed: definition.speed?.defaultValue,
+      hue: definition.hue?.defaultValue,
+      animationId: definition.animationId?.defaultValue,
+      colorShift: definition.colorShift?.defaultValue,
+    },
+  ]),
+);
 
 const state = {
   adapter: null,
@@ -7,6 +20,9 @@ const state = {
   color: "#ff5fa2",
   brightness: 10,
   activeScene: null,
+  activeCustomAnimation: null,
+  animationMode: "pulse",
+  animationSettings,
   poweredOff: false,
   sending: false,
 };
@@ -33,6 +49,28 @@ const elements = {
   onButton: document.querySelector("#onButton"),
   offButton: document.querySelector("#offButton"),
   applyColorButton: document.querySelector("#applyColorButton"),
+  animationMode: document.querySelector("#animationMode"),
+  animationColorField: document.querySelector("#animationColorField"),
+  animationColorInput: document.querySelector("#animationColorInput"),
+  animationColorSwatch: document.querySelector("#animationColorSwatch"),
+  animationColorValue: document.querySelector("#animationColorValue"),
+  animationSpeedField: document.querySelector("#animationSpeedField"),
+  animationSpeedInput: document.querySelector("#animationSpeedInput"),
+  animationSpeedValue: document.querySelector("#animationSpeedValue"),
+  animationHueField: document.querySelector("#animationHueField"),
+  animationHueInput: document.querySelector("#animationHueInput"),
+  animationHueValue: document.querySelector("#animationHueValue"),
+  animationIdField: document.querySelector("#animationIdField"),
+  animationIdInput: document.querySelector("#animationIdInput"),
+  animationIdValue: document.querySelector("#animationIdValue"),
+  colorShiftField: document.querySelector("#colorShiftField"),
+  colorShiftInput: document.querySelector("#colorShiftInput"),
+  colorShiftValue: document.querySelector("#colorShiftValue"),
+  applyAnimationButton: document.querySelector("#applyAnimationButton"),
+  animationSummarySwatch: document.querySelector("#animationSummarySwatch"),
+  animationSummaryName: document.querySelector("#animationSummaryName"),
+  animationSummaryDescription: document.querySelector("#animationSummaryDescription"),
+  animationPacketPreview: document.querySelector("#animationPacketPreview"),
   sceneButtons: [...document.querySelectorAll("[data-scene]")],
   toast: document.querySelector("#toast"),
 };
@@ -45,6 +83,7 @@ function setControlsDisabled(disabled) {
   elements.onButton.disabled = disabled;
   elements.offButton.disabled = disabled;
   elements.applyColorButton.disabled = disabled;
+  elements.applyAnimationButton.disabled = disabled;
   elements.sceneButtons.forEach((button) => { button.disabled = disabled; });
 }
 
@@ -76,6 +115,74 @@ function setCommandStatus(status, message) {
 
 function packetLabel(packet) {
   return [...packet].map((byte) => byte.toString(16).padStart(2, "0")).join(" ");
+}
+
+function activeAdapter() {
+  return state.adapter || defaultAdapter;
+}
+
+function currentAnimationDefinition() {
+  return activeAdapter().customAnimations[state.animationMode];
+}
+
+function currentAnimationSettings() {
+  return state.animationSettings[state.animationMode];
+}
+
+function currentAnimationParameters() {
+  return {
+    color: state.color,
+    ...currentAnimationSettings(),
+  };
+}
+
+function setRangeControl(input, output, range, value) {
+  if (!range) return;
+  input.min = String(range.minimum);
+  input.max = String(range.maximum);
+  input.value = String(value);
+  const progress = ((value - range.minimum) / (range.maximum - range.minimum)) * 100;
+  input.style.setProperty("--progress", `${progress}%`);
+  output.textContent = `${value} / ${range.maximum}`;
+}
+
+function customAnimationDescription(definition, settings) {
+  if (definition.usesColor) return `${definition.description} · speed ${settings.speed}`;
+  if (definition.hue) return `Starting hue ${settings.hue} · speed ${settings.speed}`;
+  if (definition.animationId) return `Pattern ${settings.animationId} · speed ${settings.speed}`;
+  if (definition.colorShift) return `Shift value ${settings.colorShift} · experimental`;
+  return definition.description;
+}
+
+function updateAnimationBuilder() {
+  const definition = currentAnimationDefinition();
+  const settings = currentAnimationSettings();
+  const color = state.color.toUpperCase();
+  const previewColor = definition.usesColor ? color : definition.previewColor;
+
+  elements.animationMode.value = state.animationMode;
+  elements.animationColorField.hidden = !definition.usesColor;
+  elements.animationSpeedField.hidden = !definition.speed;
+  elements.animationHueField.hidden = !definition.hue;
+  elements.animationIdField.hidden = !definition.animationId;
+  elements.colorShiftField.hidden = !definition.colorShift;
+
+  elements.animationColorInput.value = state.color;
+  elements.animationColorSwatch.style.background = color;
+  elements.animationColorValue.textContent = color;
+  setRangeControl(elements.animationSpeedInput, elements.animationSpeedValue, definition.speed, settings.speed);
+  setRangeControl(elements.animationHueInput, elements.animationHueValue, definition.hue, settings.hue);
+  setRangeControl(elements.animationIdInput, elements.animationIdValue, definition.animationId, settings.animationId);
+  setRangeControl(elements.colorShiftInput, elements.colorShiftValue, definition.colorShift, settings.colorShift);
+
+  elements.animationSummaryName.textContent = definition.name;
+  elements.animationSummaryDescription.textContent = customAnimationDescription(definition, settings);
+  elements.animationSummarySwatch.dataset.effect = definition.previewEffect;
+  elements.animationSummarySwatch.style.setProperty("--summary-color", previewColor);
+  elements.animationSummarySwatch.style.background = definition.previewEffect.includes("rainbow")
+    ? "conic-gradient(#ff5fa2, #ffc95c, #55ddbd, #6b8cff, #ff5fa2)"
+    : previewColor;
+  elements.animationPacketPreview.textContent = packetLabel(definition.packet(currentAnimationParameters())).toUpperCase();
 }
 
 async function sendPacket(packet, label) {
@@ -182,29 +289,32 @@ function disconnect() {
 function selectSolidColor(color) {
   state.color = color.toLowerCase();
   state.activeScene = null;
+  state.activeCustomAnimation = null;
   state.poweredOff = false;
   elements.colorInput.value = state.color;
   updatePreview();
 }
 
 function updatePreview() {
-  const color = state.color.toUpperCase();
-  const scene = state.activeScene ? state.adapter?.scenes[state.activeScene] : null;
+  const selectedColor = state.color.toUpperCase();
+  const scene = state.activeScene ? activeAdapter().scenes[state.activeScene] : null;
+  const effect = state.activeCustomAnimation || scene;
+  const color = (effect?.color || selectedColor).toUpperCase();
   const brightness = state.brightness / 10;
 
   elements.lightstickVisual.style.setProperty("--light-color", color);
-  elements.lightstickVisual.style.setProperty("--light-alpha", String(Math.max(0.08, brightness)));
-  elements.lightstickVisual.dataset.effect = scene?.previewEffect || "solid";
-  elements.lightstickVisual.classList.toggle("is-off", state.poweredOff || state.brightness === 0);
-  elements.colorSwatch.style.background = color;
+  elements.lightstickVisual.style.setProperty("--light-alpha", String(effect ? 1 : Math.max(0.08, brightness)));
+  elements.lightstickVisual.dataset.effect = effect?.previewEffect || "solid";
+  elements.lightstickVisual.classList.toggle("is-off", state.poweredOff || (!effect && state.brightness === 0));
+  elements.colorSwatch.style.background = selectedColor;
   elements.hexValue.textContent = color;
   elements.brightnessValue.textContent = `${state.brightness} / 10`;
   elements.brightnessInput.style.setProperty("--progress", `${state.brightness * 10}%`);
 
-  if (scene) {
+  if (effect) {
     elements.previewMode.textContent = "Effect";
-    elements.previewName.textContent = scene.name;
-    elements.previewDescription.textContent = scene.description;
+    elements.previewName.textContent = effect.name;
+    elements.previewDescription.textContent = effect.description;
   } else if (state.poweredOff) {
     elements.previewMode.textContent = "Off";
     elements.previewName.textContent = "Lightstick off";
@@ -216,11 +326,12 @@ function updatePreview() {
   }
 
   elements.colorPresets.forEach((button) => {
-    button.classList.toggle("active", !scene && button.dataset.color.toUpperCase() === color);
+    button.classList.toggle("active", !effect && button.dataset.color.toUpperCase() === selectedColor);
   });
   elements.sceneButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.scene === state.activeScene);
   });
+  updateAnimationBuilder();
 }
 
 elements.connectButton.addEventListener("click", () => {
@@ -239,6 +350,7 @@ elements.offButton.addEventListener("click", async () => {
   if (await sendPacket(state.adapter.commands.powerOff(), "Power off")) {
     state.poweredOff = true;
     state.activeScene = null;
+    state.activeCustomAnimation = null;
     updatePreview();
   }
 });
@@ -246,6 +358,7 @@ elements.offButton.addEventListener("click", async () => {
 elements.applyColorButton.addEventListener("click", async () => {
   if (await sendPacket(state.adapter.commands.staticColor(state.color, state.brightness), "Solid color")) {
     state.activeScene = null;
+    state.activeCustomAnimation = null;
     state.poweredOff = state.brightness === 0;
     updatePreview();
   }
@@ -260,6 +373,7 @@ elements.colorPresets.forEach((button) => {
 elements.brightnessInput.addEventListener("input", (event) => {
   state.brightness = Number(event.target.value);
   state.activeScene = null;
+  state.activeCustomAnimation = null;
   state.poweredOff = state.brightness === 0;
   updatePreview();
 });
@@ -271,12 +385,58 @@ elements.sceneButtons.forEach((button) => {
 
     if (await sendPacket(scene.packet(), scene.name)) {
       state.activeScene = button.dataset.scene;
+      state.activeCustomAnimation = null;
       state.color = scene.color;
       state.poweredOff = false;
       elements.colorInput.value = scene.color;
       updatePreview();
     }
   });
+});
+
+elements.animationMode.addEventListener("change", (event) => {
+  state.animationMode = event.target.value;
+  updateAnimationBuilder();
+});
+
+elements.animationColorInput.addEventListener("input", (event) => selectSolidColor(event.target.value));
+
+elements.animationSpeedInput.addEventListener("input", (event) => {
+  currentAnimationSettings().speed = Number(event.target.value);
+  updateAnimationBuilder();
+});
+
+elements.animationHueInput.addEventListener("input", (event) => {
+  currentAnimationSettings().hue = Number(event.target.value);
+  updateAnimationBuilder();
+});
+
+elements.animationIdInput.addEventListener("input", (event) => {
+  currentAnimationSettings().animationId = Number(event.target.value);
+  updateAnimationBuilder();
+});
+
+elements.colorShiftInput.addEventListener("input", (event) => {
+  currentAnimationSettings().colorShift = Number(event.target.value);
+  updateAnimationBuilder();
+});
+
+elements.applyAnimationButton.addEventListener("click", async () => {
+  const definition = currentAnimationDefinition();
+  const settings = currentAnimationSettings();
+  const packet = definition.packet(currentAnimationParameters());
+
+  if (await sendPacket(packet, definition.name)) {
+    state.activeScene = null;
+    state.activeCustomAnimation = {
+      name: definition.animationId ? `${definition.name} ${settings.animationId}` : definition.name,
+      description: customAnimationDescription(definition, settings),
+      previewEffect: definition.previewEffect,
+      color: definition.usesColor ? state.color : definition.previewColor,
+    };
+    state.poweredOff = false;
+    updatePreview();
+  }
 });
 
 function initializeSupportMessage() {
