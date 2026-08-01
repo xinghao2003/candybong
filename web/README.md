@@ -33,6 +33,29 @@ The custom animation builder exposes all currently documented animation families
 
 Solid-color brightness is a separate 0–10 value. Displayed colors can differ from the selected RGB value because the LEDs have a smaller real-world gamut than the mathematical RGB color space.
 
+## Track Studio
+
+Track Studio authors repeatable light shows for a specific song entirely in the browser:
+
+1. Import a browser-playable audio file. The file stays on the device; Web Audio only decodes it locally to draw the waveform.
+2. Seek with the audio controls, or click and drag the waveform. Zoom with the − / + / Fit buttons or scroll over the waveform; the window anchors at the playhead (buttons) or the cursor (scroll), and cue markers and the playhead follow the zoom. During playback the window pans to keep the playhead visible. Ctrl+scroll is intentionally left to the browser, which reserves it for whole-page zoom.
+3. Choose a solid color, off command, or firmware animation and add it at the current timestamp. The cue time field always follows the playhead, so you can scrub to the next moment and add another cue right away.
+4. Select a cue from the waveform or cue list to edit its time and parameters. Drag a cue marker along the waveform to move it to a new timestamp (the audio seeks along so you can hear the new position).
+5. Play the track to preview the sequence. If a Candybong is connected, each cue is also written over Bluetooth; otherwise the on-page light is updated as a visual preview.
+6. Export a `.candybong.json` show file. The JSON includes track metadata and ordered cues, but never embeds or copies the audio.
+
+Effects are persistent device states: a cue takes effect at its timestamp and remains active until the next cue. Seeking applies the last cue at or before the new playhead position; the cue list highlights that active cue without rewriting the editor form. The audio element's `currentTime` is the playback clock, avoiding a second timer that can drift away from the song.
+
+For a published show, host the licensed audio file and its exported JSON together, then link to the app with the JSON path in a query parameter:
+
+```text
+https://example.com/candybong/?show=shows/my-song.candybong.json
+```
+
+The app loads the JSON and the track filename recorded inside it from the same web origin. Same-origin loading is intentional: it avoids silently sending show viewers to third-party audio hosts. Only publish music you have permission to distribute.
+
+Track playback should remain in the foreground for the most consistent timing. Bluetooth writes have device and browser latency, so a configurable cue offset and calibration pass are recommended before using a show in a venue.
+
 The Factory Palette Lab sends the device-defined color command `ff 15 00 II`, where `II` ranges from `00` through `1b`. Nine physically observed member-color candidates are included as provisional labels: Dahyun `00`, Chaeyoung `01`, Jihyo `02`, Jeongyeon `09`, Mina `0b`, Nayeon `0e`, Tzuyu `14`, Sana `16`, and Momo `1b`. These are not an official firmware mapping and can be confirmed or replaced in the lab. User observations are saved in browser local storage under `candybong-factory-palette-v1` and take precedence over the provisional labels.
 
 The optional Diagnostics panel records transmitted command bytes and listens for responses on Nordic UART characteristic `6e400003-b5a3-f393-e0a9-e50e24dcca9e`. Notification setup is non-fatal: if the response endpoint is absent or does not support notifications, normal command control remains available and the panel reports RX as unavailable.
@@ -46,3 +69,9 @@ python -m http.server 4173 --bind 127.0.0.1 --directory web
 ```
 
 Then open `http://127.0.0.1:4173/`.
+
+Run the show-format tests from `web` with:
+
+```powershell
+npm test
+```

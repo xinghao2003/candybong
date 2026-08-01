@@ -316,6 +316,133 @@
         </div>
       </section>
 
+      <section class="panel track-studio-panel" id="trackStudio" aria-labelledby="trackStudioTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="section-label">TRACK STUDIO</p>
+            <h2 id="trackStudioTitle">Choreograph a song</h2>
+          </div>
+          <span class="music-local-badge">LOCAL AUDIO</span>
+        </div>
+
+        <p class="studio-intro">Import a song, seek to a moment, and add a light cue. Each cue stays active until the next one. Audio is decoded in this browser and is never uploaded.</p>
+
+        <div class="studio-file-bar">
+          <label class="button button-primary studio-file-button">
+            <input data-studio="trackFile" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac,.opus" />
+            Import audio track
+          </label>
+          <label class="button button-secondary studio-file-button">
+            <input data-studio="showFile" type="file" accept="application/json,.json" />
+            Open show JSON
+          </label>
+          <div class="studio-track-copy">
+            <strong data-studio="trackName">No track loaded</strong>
+            <span data-studio="trackMeta">Choose a browser-playable audio file</span>
+          </div>
+        </div>
+
+        <audio class="studio-audio" data-studio="audio" controls preload="metadata" hidden></audio>
+
+        <div class="studio-timeline-shell">
+          <canvas class="studio-waveform" data-studio="waveform" aria-label="Audio waveform and animation cue timeline"></canvas>
+          <div class="studio-zoom-bar">
+            <button class="studio-zoom-button" data-studio="zoomOut" type="button" aria-label="Zoom out" title="Zoom out" disabled>−</button>
+            <output class="studio-zoom-range" data-studio="zoomRange">Full track</output>
+            <button class="studio-zoom-button" data-studio="zoomIn" type="button" aria-label="Zoom in" title="Zoom in" disabled>+</button>
+            <button class="button button-secondary button-small" data-studio="zoomReset" type="button" disabled>Fit</button>
+            <span class="studio-zoom-help">Scroll to zoom</span>
+          </div>
+          <div class="studio-time-row">
+            <output data-studio="time">0:00.00</output>
+            <span>Drag to seek · drag a cue marker to move it</span>
+            <output data-studio="duration">0:00.00</output>
+          </div>
+        </div>
+
+        <div class="studio-status" data-studio="status" role="status" aria-live="polite">Import a track to start authoring.</div>
+
+        <div class="studio-layout">
+          <div class="studio-cue-editor">
+            <div class="studio-field-grid">
+              <label class="field-label" for="studioCueTime">
+                <span>Cue time (seconds)</span>
+                <input class="text-control" id="studioCueTime" data-studio="cueTime" type="number" min="0" step="0.01" value="0" />
+              </label>
+              <label class="field-label" for="studioCueMode">
+                <span>Animation</span>
+                <select class="select-control" id="studioCueMode" data-studio="cueMode">
+                  <option value="solid" selected>Solid color</option>
+                  <option value="off">Lights off</option>
+                  <option value="blink">Color blink</option>
+                  <option value="pulse">Color pulse</option>
+                  <option value="slowPulse">Slow color pulse</option>
+                  <option value="randomBlink">Random-color blink</option>
+                  <option value="hueSpin">Hue rotation</option>
+                  <option value="builtIn">Built-in animation</option>
+                  <option value="twiceShift">TWICE color shift · experimental</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="field-label" for="studioCueLabel">
+              <span>Label (optional)</span>
+              <input class="text-control" id="studioCueLabel" data-studio="cueLabel" type="text" maxlength="80" placeholder="Example: chorus starts" />
+            </label>
+
+            <div class="studio-field-grid">
+              <label class="field-label" data-cue-field="solid blink pulse slowPulse" for="studioCueColor">
+                <span>Color</span>
+                <input class="studio-color-control" id="studioCueColor" data-studio="cueColor" type="color" value="#ff5fa2" />
+              </label>
+              <label class="field-label" data-cue-field="solid" for="studioCueBrightness">
+                <span>Brightness (0–10)</span>
+                <input class="text-control" id="studioCueBrightness" data-studio="cueBrightness" type="number" min="0" max="10" step="1" value="10" />
+              </label>
+              <label class="field-label" data-cue-field="blink pulse slowPulse randomBlink hueSpin builtIn" for="studioCueSpeed">
+                <span>Firmware speed (hue rotation: 0–3; others: 0–255)</span>
+                <input class="text-control" id="studioCueSpeed" data-studio="cueSpeed" type="number" min="0" max="255" step="1" value="14" />
+              </label>
+              <label class="field-label" data-cue-field="hueSpin" for="studioCueHue">
+                <span>Starting hue (0–255)</span>
+                <input class="text-control" id="studioCueHue" data-studio="cueHue" type="number" min="0" max="255" step="1" value="16" />
+              </label>
+              <label class="field-label" data-cue-field="builtIn" for="studioCueAnimationId">
+                <span>Pattern ID (1–9)</span>
+                <input class="text-control" id="studioCueAnimationId" data-studio="cueAnimationId" type="number" min="1" max="9" step="1" value="1" />
+              </label>
+              <label class="field-label" data-cue-field="twiceShift" for="studioCueColorShift">
+                <span>Color shift (1–255)</span>
+                <input class="text-control" id="studioCueColorShift" data-studio="cueColorShift" type="number" min="1" max="255" step="1" value="16" />
+              </label>
+            </div>
+
+            <div class="studio-cue-actions">
+              <button class="button button-primary" data-studio="addCue" type="button" disabled>Add cue</button>
+              <button class="button button-secondary" data-studio="updateCue" type="button" disabled>Update selected</button>
+              <button class="button button-secondary" data-studio="deleteCue" type="button" disabled>Delete</button>
+            </div>
+          </div>
+
+          <aside class="studio-cue-sidebar">
+            <div class="studio-cue-heading">
+              <div><span class="section-label">CUE LIST</span><strong>Show sequence</strong></div>
+              <button class="button button-secondary button-small" data-studio="clearCues" type="button" disabled>Clear</button>
+            </div>
+            <p class="studio-cue-empty" data-studio="cueEmpty">No cues yet. Put the playhead on a moment and add one.</p>
+            <ol class="studio-cue-list" data-studio="cueList"></ol>
+          </aside>
+        </div>
+
+        <div class="studio-export-bar">
+          <div>
+            <strong>Portable show file</strong>
+            <span>JSON contains timing and light commands; it does not copy the audio.</span>
+          </div>
+          <button class="button button-dark" data-studio="exportShow" type="button" disabled>Export show JSON</button>
+        </div>
+      </section>
+
       <details class="tool-panel" id="factoryPalettePanel">
         <summary>
           <span>

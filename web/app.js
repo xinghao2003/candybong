@@ -1,5 +1,7 @@
 import { LIGHTSTICK_ADAPTERS, adapterForDevice, bluetoothRequestOptions } from "./adapters.js";
 import { MicrophoneReactiveController, microphoneErrorMessage, microphoneSupportMessage } from "./music-reactive.js";
+import { cueModeLabel } from "./show-format.js";
+import { TrackStudio } from "./track-studio.js";
 
 const defaultAdapter = LIGHTSTICK_ADAPTERS[0];
 const FACTORY_PALETTE_STORAGE_KEY = "candybong-factory-palette-v1";
@@ -47,6 +49,7 @@ const state = {
   animationSettings,
   selectedFactoryIndex: 0,
   activeFactoryIndex: null,
+  timelineCue: null,
   factoryPalette: {},
   diagnostics: [],
   poweredOff: false,
@@ -69,6 +72,9 @@ const state = {
     writePromise: null,
   },
 };
+
+let trackStudio = null;
+let timelineWriteChain = Promise.resolve();
 
 const elements = {
   connectButton: document.querySelector("#connectButton"),
@@ -655,10 +661,13 @@ async function stopMusicAndRestore() {
 }
 
 async function sendPacket(packet, label) {
+  trackStudio?.pauseForManualControl();
+  state.timelineCue = null;
   if (state.music.active || state.music.starting) stopMusicReactive("Stopped by manual control");
   if (state.music.writePromise) {
     try { await state.music.writePromise; } catch (error) { /* The reactive writer reports its own error. */ }
   }
+  try { await timelineWriteChain; } catch (error) { /* Timeline write errors are reported where they occur. */ }
 
   if (!state.adapter || !state.characteristic) {
     showToast("Connect your Candybong first");
@@ -797,6 +806,8 @@ function disconnect() {
 }
 
 function selectSolidColor(color) {
+  trackStudio?.pauseForManualControl();
+  state.timelineCue = null;
   state.color = color.toLowerCase();
   state.activeScene = null;
   state.activeCustomAnimation = null;
@@ -830,6 +841,10 @@ function updatePreview() {
     elements.previewMode.textContent = "Music";
     elements.previewName.textContent = MUSIC_MODE_LABELS[state.music.mode];
     elements.previewDescription.textContent = `Microphone reactive · brightness ${state.music.brightness}`;
+  } else if (state.timelineCue) {
+    elements.previewMode.textContent = "Track";
+    elements.previewName.textContent = state.timelineCue.label || cueModeLabel(state.timelineCue.mode);
+    elements.previewDescription.textContent = `Timeline cue at ${state.timelineCue.time.toFixed(2)} seconds`;
   } else if (factoryActive) {
     const entry = factoryEntry(state.activeFactoryIndex);
     elements.previewMode.textContent = "Factory";
@@ -856,6 +871,59 @@ function updatePreview() {
     button.classList.toggle("active", !musicActive && button.dataset.scene === state.activeScene);
   });
   updateAnimationBuilder();
+}
+
+function trackCuePacket(cue) {
+  const adapter = activeAdapter();
+  if (cue.mode === "off") return adapter.commands.powerOff();
+  if (cue.mode === "solid") return adapter.commands.staticColor(cue.color, cue.brightness);
+  const definition = adapter.customAnimations[cue.mode];
+  if (!definition) throw new RangeError(`Unsupported timeline animation: ${cue.mode}`);
+  return definition.packet({
+    color: cue.color,
+    speed: cue.speed,
+    hue: cue.hue,
+    animationId: cue.animationId,
+    colorShift: cue.colorShift,
+  });
+}
+
+function applyTrackCue(cue) {
+  const definition = cue.mode === "off" || cue.mode === "solid" ? null : activeAdapter().customAnimations[cue.mode];
+  state.timelineCue = cue;
+  state.activeScene = null;
+  state.activeFactoryIndex = null;
+  state.color = cue.color;
+  state.brightness = cue.brightness;
+  state.poweredOff = cue.mode === "off" || (cue.mode === "solid" && cue.brightness === 0);
+  state.activeCustomAnimation = definition ? {
+    name: cue.label || cueModeLabel(cue.mode),
+    description: `Track cue at ${cue.time.toFixed(2)} seconds`,
+    previewEffect: definition.previewEffect,
+    color: definition.usesColor ? cue.color : definition.previewColor,
+  } : null;
+  elements.colorInput.value = cue.color;
+  updatePreview();
+
+  if (!isConnected()) return Promise.resolve(false);
+  const packet = trackCuePacket(cue);
+  const label = `Track cue · ${cue.label || cueModeLabel(cue.mode)}`;
+  timelineWriteChain = timelineWriteChain
+    .catch(() => {})
+    .then(async () => {
+      if (!isConnected()) return false;
+      addDiagnostic("TX", label, packet, "tx");
+      await writeCharacteristic(packet);
+      setCommandStatus("success", `${label} · ${packetLabel(packet)}`);
+      return true;
+    })
+    .catch((error) => {
+      console.error(error);
+      addDiagnostic("ERR", `${label} failed: ${error.message || "Bluetooth write error"}`, null, "error");
+      setCommandStatus("error", "Timeline cue failed. Playback continues.");
+      return false;
+    });
+  return timelineWriteChain;
 }
 
 elements.connectButton.addEventListener("click", () => {
@@ -918,6 +986,8 @@ elements.colorPresets.forEach((button) => {
 });
 
 elements.brightnessInput.addEventListener("input", (event) => {
+  trackStudio?.pauseForManualControl();
+  state.timelineCue = null;
   state.brightness = Number(event.target.value);
   state.activeScene = null;
   state.activeCustomAnimation = null;
@@ -1064,6 +1134,19 @@ function initializeSupportMessage() {
     elements.supportNote.textContent = "Web Bluetooth ready · Nordic UART profile";
   }
 }
+
+trackStudio = new TrackStudio({
+  root: document.querySelector("#trackStudio"),
+  onCue: applyTrackCue,
+  onPlaybackChange: (playing) => {
+    if (!playing) return;
+    if (state.music.active || state.music.starting) stopMusicReactive("Stopped by track playback");
+    setCommandStatus(null, isConnected()
+      ? "Track playback is controlling the connected lightstick"
+      : "Track playback is running as a visual preview");
+  },
+  onNotice: showToast,
+});
 
 loadFactoryPalette();
 renderFactoryPalette();
