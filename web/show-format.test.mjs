@@ -18,6 +18,21 @@ test("normalizes, rounds, and sorts cues", () => {
   assert.equal(show.cues[0].color, "#ff5fa2");
 });
 
+test("normalizes the cue offset", () => {
+  const show = createShow({
+    file: { name: "track.mp3" },
+    duration: 10,
+    cues: [],
+    cueOffsetMs: 250,
+  });
+  assert.equal(show.cueOffsetMs, 250);
+  assert.equal(createShow({ file: { name: "track.mp3" }, duration: 10, cues: [] }).cueOffsetMs, 0);
+  assert.throws(
+    () => normalizeShow({ format: "candybong-show", version: 1, track: { duration: 5 }, cueOffsetMs: 1001 }),
+    /Cue offset/,
+  );
+});
+
 test("rejects malformed shows and out-of-range protocol values", () => {
   assert.throws(() => normalizeShow({ format: "wrong", version: 1 }), /Unsupported show format/);
   assert.throws(() => normalizeCue({ time: 1, mode: "solid", brightness: 11 }), /Brightness/);

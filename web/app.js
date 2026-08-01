@@ -17,6 +17,12 @@ const FACTORY_MEMBER_PALETTE = Object.freeze({
   0x1b: "Momo",
 });
 const MAX_DIAGNOSTIC_ENTRIES = 100;
+const LATENCY_PROBE_COUNT = 5;
+const LATENCY_PROBE_GAP_MS = 250;
+const LATENCY_RX_TIMEOUT_MS = 1000;
+const LATENCY_FLASH_MIN_DELAY_MS = 700;
+const LATENCY_FLASH_MAX_DELAY_MS = 2000;
+const LATENCY_TAP_TIMEOUT_MS = 10000;
 const MUSIC_WRITE_INTERVAL_MS = 125;
 const MUSIC_DIAGNOSTIC_INTERVAL_MS = 1000;
 const MUSIC_MODE_LABELS = {
@@ -52,6 +58,17 @@ const state = {
   timelineCue: null,
   factoryPalette: {},
   diagnostics: [],
+  latency: {
+    running: false,
+    tapActive: false,
+    pendingRtt: null,
+    taps: [],
+    flashStartedAt: null,
+    tapTimeout: null,
+    restoreColor: "#ff5fa2",
+    restoreBrightness: 10,
+    wasPoweredOff: false,
+  },
   poweredOff: false,
   sending: false,
   music: {
@@ -129,6 +146,12 @@ const elements = {
   saveFactoryLabelButton: document.querySelector("#saveFactoryLabelButton"),
   clearFactoryResultButton: document.querySelector("#clearFactoryResultButton"),
   responseStatus: document.querySelector("#responseStatus"),
+  latencyStatus: document.querySelector("#latencyStatus"),
+  latencyRunProbesButton: document.querySelector("#latencyRunProbesButton"),
+  latencyProbeList: document.querySelector("#latencyProbeList"),
+  latencyProbeSummary: document.querySelector("#latencyProbeSummary"),
+  latencyTapButton: document.querySelector("#latencyTapButton"),
+  latencyTapResult: document.querySelector("#latencyTapResult"),
   diagnosticLog: document.querySelector("#diagnosticLog"),
   diagnosticEmpty: document.querySelector("#diagnosticEmpty"),
   clearDiagnosticsButton: document.querySelector("#clearDiagnosticsButton"),
@@ -177,6 +200,7 @@ function setControlsDisabled(disabled) {
   elements.testFactoryColorButton.disabled = disabled;
   elements.sceneButtons.forEach((button) => { button.disabled = disabled; });
   updateMusicControls(disabled);
+  updateLatencyControls();
 }
 
 function setConnectionStatus(connected, message = "") {
@@ -324,6 +348,224 @@ function setResponseStatus(message, style = null) {
   elements.responseStatus.textContent = message;
   elements.responseStatus.classList.remove("listening", "warning");
   if (style) elements.responseStatus.classList.add(style);
+}
+
+function setLatencyStatus(message, style = null) {
+  elements.latencyStatus.textContent = message;
+  elements.latencyStatus.classList.remove("listening", "warning");
+  if (style) elements.latencyStatus.classList.add(style);
+}
+
+function updateLatencyControls() {
+  const baseLocked = !isConnected() || state.sending || state.latency.running;
+  elements.latencyRunProbesButton.disabled = baseLocked || state.latency.tapActive;
+  elements.latencyTapButton.disabled = baseLocked || (state.latency.tapActive && state.latency.flashStartedAt == null);
+  if (!state.latency.running && !state.latency.tapActive) {
+    setLatencyStatus(isConnected() ? "Ready" : "Not connected", null);
+  }
+}
+
+function cancelLatencyTests() {
+  if (state.latency.pendingRtt) {
+    const entry = state.latency.pendingRtt;
+    state.latency.pendingRtt = null;
+    window.clearTimeout(entry.timer);
+    entry.resolve(null);
+  }
+  window.clearTimeout(state.latency.tapTimeout);
+  state.latency.tapTimeout = null;
+  state.latency.flashStartedAt = null;
+  state.latency.running = false;
+  state.latency.tapActive = false;
+  elements.latencyTapButton.classList.remove("armed");
+  elements.latencyTapButton.textContent = "Start test";
+  updateLatencyControls();
+}
+
+async function latencyPreamble() {
+  trackStudio?.pauseForManualControl();
+  state.timelineCue = null;
+  if (state.music.writePromise) {
+    try { await state.music.writePromise; } catch (error) { /* The reactive writer reports its own error. */ }
+  }
+  try { await timelineWriteChain; } catch (error) { /* Timeline write errors are reported where they occur. */ }
+  if (state.music.active || state.music.starting) stopMusicReactive("Stopped by latency test");
+}
+
+// Resolves when the next response notification arrives, or after the timeout.
+function armRtt() {
+  if (!state.responseCharacteristic) return null;
+  const entry = {};
+  entry.promise = new Promise((resolve) => {
+    entry.resolve = resolve;
+  });
+  entry.timer = window.setTimeout(() => {
+    if (state.latency.pendingRtt === entry) state.latency.pendingRtt = null;
+    entry.resolve(null);
+  }, LATENCY_RX_TIMEOUT_MS);
+  state.latency.pendingRtt = entry;
+  return entry;
+}
+
+async function probeOnce(packet, label) {
+  addDiagnostic("TX", label, packet, "tx");
+  const rtt = armRtt();
+  const writeStart = performance.now();
+  let writeMs = null;
+  try {
+    await writeCharacteristic(packet, false);
+    writeMs = performance.now() - writeStart;
+  } catch (error) {
+    console.error(error);
+    addDiagnostic("ERR", `${label} failed: ${error.message || "Bluetooth write error"}`, null, "error");
+    if (rtt) {
+      if (state.latency.pendingRtt === rtt) state.latency.pendingRtt = null;
+      window.clearTimeout(rtt.timer);
+      rtt.resolve(null);
+    }
+    return { label, writeMs, echoMs: null, echoState: "failed" };
+  }
+  const rxAt = await rtt?.promise;
+  return {
+    label,
+    writeMs,
+    echoMs: rxAt == null ? null : Math.max(0, rxAt - writeStart),
+    echoState: rxAt == null ? (rtt ? "timeout" : "unavailable") : "ok",
+  };
+}
+
+function renderLatencyProbeList(results) {
+  elements.latencyProbeList.replaceChildren();
+  for (const probe of results) {
+    const item = document.createElement("li");
+    const write = probe.writeMs == null ? "—" : `${probe.writeMs.toFixed(0)} ms`;
+    const echo = probe.echoMs != null
+      ? `${probe.echoMs.toFixed(0)} ms`
+      : probe.echoState === "timeout" ? "no echo" : probe.echoState === "failed" ? "failed" : "n/a";
+    item.textContent = `${probe.label}: write ${write} · echo ${echo}`;
+    elements.latencyProbeList.append(item);
+  }
+}
+
+function statsLabel(times) {
+  if (!times.length) return "no samples";
+  const min = Math.round(Math.min(...times));
+  const max = Math.round(Math.max(...times));
+  const avg = Math.round(times.reduce((sum, time) => sum + time, 0) / times.length);
+  return `${min}–${max} ms · avg ${avg} ms`;
+}
+
+function renderLatencyProbeSummary(results) {
+  const writeTimes = results.filter((probe) => probe.writeMs != null).map((probe) => probe.writeMs);
+  const echoTimes = results.filter((probe) => probe.echoMs != null).map((probe) => probe.echoMs);
+  const writeStats = statsLabel(writeTimes);
+  const echoStats = statsLabel(echoTimes);
+  elements.latencyProbeSummary.textContent = `Write ${writeStats} · RX echo ${echoStats}`;
+  if (writeTimes.length || echoTimes.length) {
+    addDiagnostic("SYS", `Latency probes: write ${writeStats} · RX echo ${echoStats}`, null, "status");
+  }
+}
+
+async function runLatencyProbes() {
+  if (!isConnected() || state.latency.running || state.latency.tapActive) return;
+  await latencyPreamble();
+  if (!isConnected()) return;
+  state.latency.running = true;
+  updateLatencyControls();
+  setLatencyStatus("Probing…", "listening");
+  renderLatencyProbeList([]);
+  elements.latencyProbeSummary.textContent = "Probing…";
+
+  const wasPoweredOff = state.poweredOff;
+  const color = state.color;
+  const brightness = Math.max(1, state.brightness);
+  const packets = Array.from({ length: LATENCY_PROBE_COUNT }, (_, index) =>
+    state.adapter.commands.staticColor(index % 2 === 0 ? color : "#ffffff", index % 2 === 0 ? brightness : 10));
+  const results = [];
+  for (let index = 0; index < packets.length; index += 1) {
+    if (index > 0) await new Promise((resolve) => window.setTimeout(resolve, LATENCY_PROBE_GAP_MS));
+    results.push(await probeOnce(packets[index], `Latency probe ${index + 1}`));
+    renderLatencyProbeList(results);
+  }
+  renderLatencyProbeSummary(results);
+
+  if (wasPoweredOff && isConnected()) {
+    const packet = state.adapter.commands.powerOff();
+    addDiagnostic("TX", "Latency restore · power off", packet, "tx");
+    writeCharacteristic(packet, false).catch((error) => console.error(error));
+  }
+
+  state.latency.running = false;
+  updateLatencyControls();
+  setLatencyStatus(isConnected() ? "Ready" : "Not connected", null);
+}
+
+function restoreLatencyFlash() {
+  if (!isConnected()) return;
+  const packet = state.latency.wasPoweredOff
+    ? state.adapter.commands.powerOff()
+    : state.adapter.commands.staticColor(state.latency.restoreColor, state.latency.restoreBrightness);
+  addDiagnostic("TX", state.latency.wasPoweredOff ? "Latency restore · power off" : "Latency restore · color", packet, "tx");
+  writeCharacteristic(packet, false).catch((error) => console.error(error));
+}
+
+async function startLatencyTapTest() {
+  if (!isConnected() || state.latency.running || state.latency.tapActive) return;
+  state.latency.tapActive = true;
+  state.latency.wasPoweredOff = state.poweredOff;
+  state.latency.restoreColor = state.color;
+  state.latency.restoreBrightness = state.brightness;
+  updateLatencyControls();
+  await latencyPreamble();
+  if (!isConnected()) {
+    cancelLatencyTests();
+    return;
+  }
+  setLatencyStatus("Waiting for tap…", "listening");
+
+  const tap = elements.latencyTapButton;
+  tap.textContent = "Get ready…";
+  const delay = LATENCY_FLASH_MIN_DELAY_MS + Math.random() * (LATENCY_FLASH_MAX_DELAY_MS - LATENCY_FLASH_MIN_DELAY_MS);
+  await new Promise((resolve) => window.setTimeout(resolve, delay));
+  if (!isConnected()) {
+    cancelLatencyTests();
+    return;
+  }
+
+  state.latency.flashStartedAt = performance.now();
+  const flashPacket = state.adapter.commands.staticColor("#ffffff", 10);
+  addDiagnostic("TX", "Latency flash · white", flashPacket, "tx");
+  writeCharacteristic(flashPacket, false).catch((error) => {
+    console.error(error);
+    setLatencyStatus("Flash failed", "warning");
+    cancelLatencyTests();
+  });
+
+  tap.textContent = "TAP NOW!";
+  tap.classList.add("armed");
+  updateLatencyControls();
+  state.latency.tapTimeout = window.setTimeout(() => {
+    if (state.latency.flashStartedAt == null) return;
+    state.latency.flashStartedAt = null;
+    state.latency.tapActive = false;
+    restoreLatencyFlash();
+    elements.latencyTapResult.textContent = "Flash missed — try again";
+    tap.classList.remove("armed");
+    tap.textContent = "Start test";
+    updateLatencyControls();
+  }, LATENCY_TAP_TIMEOUT_MS);
+}
+
+function renderLatencyTapResult() {
+  const taps = state.latency.taps;
+  if (!taps.length) {
+    elements.latencyTapResult.textContent = "Not tested yet";
+    return;
+  }
+  const last = Math.round(taps[taps.length - 1]);
+  const best = Math.round(Math.min(...taps));
+  const avg = Math.round(taps.reduce((sum, time) => sum + time, 0) / taps.length);
+  elements.latencyTapResult.textContent = `Last ${last} ms · best ${best} ms · avg ${avg} ms (${taps.length} ${taps.length === 1 ? "tap" : "taps"})`;
 }
 
 function activeAdapter() {
@@ -703,6 +945,13 @@ function handleResponseValue(event) {
   if (!value) return;
   const packet = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
   addDiagnostic("RX", "Device response", packet, "rx");
+  // Resolve the pending latency probe: TX timestamp is stored at write time.
+  const entry = state.latency.pendingRtt;
+  if (entry) {
+    state.latency.pendingRtt = null;
+    window.clearTimeout(entry.timer);
+    entry.resolve(performance.now());
+  }
 }
 
 function clearResponseCharacteristic() {
@@ -787,6 +1036,7 @@ async function connect() {
 function handleDisconnect() {
   stopMusicReactive("Lightstick disconnected");
   clearResponseCharacteristic();
+  cancelLatencyTests();
   state.adapter = null;
   state.characteristic = null;
   state.sending = false;
@@ -1121,6 +1371,25 @@ elements.factoryColorLabel.addEventListener("keydown", (event) => {
 elements.clearDiagnosticsButton.addEventListener("click", () => {
   state.diagnostics = [];
   renderDiagnostics();
+});
+
+elements.latencyRunProbesButton.addEventListener("click", runLatencyProbes);
+
+elements.latencyTapButton.addEventListener("click", () => {
+  if (state.latency.flashStartedAt != null) {
+    const ms = performance.now() - state.latency.flashStartedAt;
+    state.latency.flashStartedAt = null;
+    state.latency.tapActive = false;
+    window.clearTimeout(state.latency.tapTimeout);
+    state.latency.taps.push(ms);
+    restoreLatencyFlash();
+    renderLatencyTapResult();
+    elements.latencyTapButton.classList.remove("armed");
+    elements.latencyTapButton.textContent = "Start test";
+    updateLatencyControls();
+  } else {
+    startLatencyTapTest();
+  }
 });
 
 function initializeSupportMessage() {

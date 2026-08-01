@@ -351,7 +351,12 @@
             <output class="studio-zoom-range" data-studio="zoomRange">Full track</output>
             <button class="studio-zoom-button" data-studio="zoomIn" type="button" aria-label="Zoom in" title="Zoom in" disabled>+</button>
             <button class="button button-secondary button-small" data-studio="zoomReset" type="button" disabled>Fit</button>
-            <span class="studio-zoom-help">Scroll to zoom</span>
+            <label class="studio-offset-control" title="Send each cue this many milliseconds early so the light changes match the music. Find your value with the Latency Lab panel.">
+              <span>Cue offset</span>
+              <input data-studio="cueOffset" type="number" min="0" max="1000" step="10" value="0" aria-label="Cue offset in milliseconds" />
+              <span>ms</span>
+            </label>
+            <span class="studio-zoom-help">Scroll to zoom · right-drag to pan</span>
           </div>
           <div class="studio-time-row">
             <output data-studio="time">0:00.00</output>
@@ -470,6 +475,42 @@
               <button class="button button-primary" id="testFactoryColorButton" type="button" disabled>Test index 00</button>
               <button class="button button-secondary" id="saveFactoryLabelButton" type="button">Save label</button>
               <button class="button button-secondary" id="clearFactoryResultButton" type="button">Clear result</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="tool-panel latency-panel" id="latencyPanel">
+        <summary>
+          <span>
+            <span class="section-label">LATENCY LAB</span>
+            <strong>Command-to-effect delay</strong>
+          </span>
+          <span class="tool-status" id="latencyStatus">Not connected</span>
+        </summary>
+        <div class="tool-panel-content">
+          <p class="tool-description">Two ways to measure how long a command takes to reach the lightstick: an automatic Bluetooth round-trip probe, and a tap test for the delay you actually see.</p>
+
+          <div class="latency-grid">
+            <div class="latency-card">
+              <div class="latency-card-heading">
+                <strong>Bluetooth round-trip</strong>
+                <span>Automatic · uses TX and RX</span>
+              </div>
+              <p class="latency-card-copy">Sends five alternating color probes. <strong>Write</strong> is how long the device takes to acknowledge the write; <strong>Echo</strong> is how long until its response notification arrives. This measures the Bluetooth path only, not the LED's own reaction time.</p>
+              <button class="button button-primary" id="latencyRunProbesButton" type="button" disabled>Run 5 probes</button>
+              <ol class="latency-probe-list" id="latencyProbeList"></ol>
+              <p class="latency-summary" id="latencyProbeSummary" aria-live="polite">No probes yet</p>
+            </div>
+
+            <div class="latency-card">
+              <div class="latency-card-heading">
+                <strong>Perceived effect</strong>
+                <span>Tap when you see it</span>
+              </div>
+              <p class="latency-card-copy">Watch the lightstick. The light will turn white after a short random delay — tap the button the instant you see it. The result includes your reaction time (~150–250 ms), so subtract that when judging choreography.</p>
+              <button class="button button-primary button-wide latency-tap-button" id="latencyTapButton" type="button" disabled>Start test</button>
+              <p class="latency-tap-result" id="latencyTapResult" aria-live="polite">Not tested yet</p>
             </div>
           </div>
         </div>

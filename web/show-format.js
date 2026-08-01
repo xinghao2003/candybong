@@ -77,12 +77,15 @@ export function normalizeShow(rawShow) {
   const duration = finiteNumber(track.duration, "Track duration");
   if (duration <= 0) throw new RangeError("Track duration must be greater than zero");
 
+  const cueOffsetMs = integerInRange(rawShow.cueOffsetMs ?? 0, 0, 1000, "Cue offset");
+
   const cues = sortCues((Array.isArray(rawShow.cues) ? rawShow.cues : []).map((cue) => normalizeCue(cue, duration)));
   if (new Set(cues.map((cue) => cue.id)).size !== cues.length) throw new RangeError("Cue IDs must be unique");
 
   return {
     format: SHOW_FORMAT,
     version: SHOW_VERSION,
+    cueOffsetMs,
     title: String(rawShow.title || track.filename || "Untitled show").trim().slice(0, 120),
     track: {
       filename: String(track.filename || "").slice(0, 255),
@@ -95,11 +98,12 @@ export function normalizeShow(rawShow) {
   };
 }
 
-export function createShow({ title, file, duration, cues }) {
+export function createShow({ title, file, duration, cues, cueOffsetMs }) {
   return normalizeShow({
     format: SHOW_FORMAT,
     version: SHOW_VERSION,
     title: title || file?.name || "Untitled show",
+    cueOffsetMs,
     track: {
       filename: file?.name || file?.filename || "",
       type: file?.type || "",

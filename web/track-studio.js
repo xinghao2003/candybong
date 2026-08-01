@@ -59,10 +59,11 @@ export class TrackStudio {
       "trackFile", "showFile", "audio", "waveform", "trackName", "trackMeta", "time", "duration",
       "status", "cueTime", "cueMode", "cueLabel", "cueColor", "cueBrightness", "cueSpeed", "cueHue",
       "cueAnimationId", "cueColorShift", "addCue", "updateCue", "deleteCue", "cueList", "cueEmpty",
-      "exportShow", "clearCues", "zoomIn", "zoomOut", "zoomReset", "zoomRange",
+      "exportShow", "clearCues", "zoomIn", "zoomOut", "zoomReset", "zoomRange", "cueOffset",
     ].map((name) => [name, root.querySelector(`[data-studio="${name}"]`)]));
 
     this.context = this.elements.waveform.getContext("2d");
+    this.cueOffsetMs = Math.max(0, Number(this.elements.cueOffset.value) || 0);
     this.bindEvents();
     this.updateCueFields();
     this.render();
@@ -90,9 +91,13 @@ export class TrackStudio {
     window.addEventListener("pointerup", (event) => this.handleTimelinePointerUp(event));
     window.addEventListener("pointercancel", (event) => this.handleTimelinePointerCancel(event));
     elements.waveform.addEventListener("wheel", (event) => this.handleTimelineWheel(event), { passive: false });
+    elements.waveform.addEventListener("contextmenu", (event) => event.preventDefault());
     elements.zoomIn.addEventListener("click", () => this.zoomBy(1 / ZOOM_STEP, this.elements.audio.currentTime));
     elements.zoomOut.addEventListener("click", () => this.zoomBy(ZOOM_STEP, this.elements.audio.currentTime));
     elements.zoomReset.addEventListener("click", () => this.resetZoom());
+    elements.cueOffset.addEventListener("input", () => {
+      this.cueOffsetMs = Math.max(0, Math.min(1000, Number(elements.cueOffset.value) || 0));
+    });
     elements.cueMode.addEventListener("change", () => this.updateCueFields());
     elements.addCue.addEventListener("click", () => this.addCue());
     elements.updateCue.addEventListener("click", () => this.updateCue());
@@ -251,7 +256,9 @@ export class TrackStudio {
   }
 
   handlePlay() {
-    this.lastPlaybackTime = this.elements.audio.currentTime - 0.01;
+    // Start the lookback window before any cue whose effective (offset-shifted) time
+    // is already in the past, e.g. a cue near 0 with a large offset.
+    this.lastPlaybackTime = this.elements.audio.currentTime - 0.01 - this.cueOffsetMs / 1000;
     this.onPlaybackChange?.(true);
     this.setStatus("Playing show · keep this page in the foreground", "playing");
     this.tick();
@@ -278,7 +285,13 @@ export class TrackStudio {
     if (!this.pointer && now + 0.02 < this.lastPlaybackTime) {
       this.applyCueAt(now, "seek");
     } else {
-      const due = this.cues.filter((cue) => cue.time > this.lastPlaybackTime + 0.001 && cue.time <= now + 0.025);
+      // A cue fires when the playhead crosses its effective time (timestamp minus
+      // the cue offset), so the command is sent early enough to match the music.
+      const offset = this.cueOffsetMs / 1000;
+      const due = this.cues.filter((cue) => {
+        const effective = cue.time - offset;
+        return effective > this.lastPlaybackTime + 0.001 && effective <= now + 0.025;
+      });
       if (due.length) this.dispatchCue(due[due.length - 1], "playback");
     }
     this.lastPlaybackTime = now;
@@ -297,6 +310,14 @@ export class TrackStudio {
     this.lastPlaybackTime = time;
     const cue = cueAtOrBefore(this.cues, time);
     if (cue) this.dispatchCue(cue, reason);
+    // With a cue offset, a seek can land between a cue's effective time and its real
+    // timestamp; the preview would otherwise skip that cue for the rest of the pass,
+    // so re-fire the newest cue in that window.
+    if (this.cueOffsetMs > 0) {
+      const offset = this.cueOffsetMs / 1000;
+      const overdue = this.cues.filter((item) => item.time > time + 0.001 && item.time - offset <= time);
+      if (overdue.length) this.dispatchCue(overdue[overdue.length - 1], reason);
+    }
   }
 
   dispatchCue(cue, reason) {
@@ -315,18 +336,23 @@ export class TrackStudio {
     if (!duration) return;
     const rect = this.elements.waveform.getBoundingClientRect();
     const x = Math.min(rect.width, Math.max(0, event.clientX - rect.left));
-    const nearest = this.cues.reduce((match, cue) => {
-      const cueX = this.timeToX(cue.time, rect.width);
-      const distance = Math.abs(cueX - x);
-      return distance < match.distance ? { cue, distance } : match;
-    }, { cue: null, distance: Infinity });
 
-    this.elements.waveform.style.cursor = "ew-resize";
+    this.elements.waveform.style.cursor = event.button === 0 ? "ew-resize" : "grabbing";
     try {
       this.elements.waveform.setPointerCapture(event.pointerId);
     } catch (error) {
       // Capture is optional: the window-level move/up listeners keep the drag alive without it.
     }
+    if (event.button !== 0) {
+      // Right (or middle) drag pans the zoomed view instead of seeking.
+      this.pointer = { mode: "pan", cueId: null, pointerId: event.pointerId, lastX: x };
+      return;
+    }
+    const nearest = this.cues.reduce((match, cue) => {
+      const cueX = this.timeToX(cue.time, rect.width);
+      const distance = Math.abs(cueX - x);
+      return distance < match.distance ? { cue, distance } : match;
+    }, { cue: null, distance: Infinity });
     if (nearest.cue && nearest.distance <= SEEK_CUE_TOLERANCE_PX) {
       this.pointer = { mode: "move", cueId: nearest.cue.id, pointerId: event.pointerId };
       this.selectCue(nearest.cue.id, { seek: true });
@@ -349,6 +375,15 @@ export class TrackStudio {
     if (!duration) return;
     const rect = this.elements.waveform.getBoundingClientRect();
     const x = Math.min(rect.width, Math.max(0, event.clientX - rect.left));
+    if (this.pointer.mode === "pan") {
+      if (this.isZoomed()) {
+        const span = this.viewEnd() - this.viewStart();
+        const shift = ((x - this.pointer.lastX) / rect.width) * span;
+        this.pointer.lastX = x;
+        this.setZoomWindow(this.viewStart() - shift, this.viewEnd() - shift);
+      }
+      return;
+    }
     const time = this.xToTime(x, rect.width);
     if (this.pointer.mode === "scrub") {
       this.seekTo(time);
@@ -365,8 +400,10 @@ export class TrackStudio {
 
   handleTimelinePointerUp(event) {
     if (!this.pointer || event.pointerId !== this.pointer.pointerId) return;
+    const wasPan = this.pointer.mode === "pan";
     this.pointer = null;
     this.elements.waveform.style.cursor = "";
+    if (wasPan) return;
     // The drag is over: apply the active cue at the final position exactly once.
     this.applyCueAt(this.elements.audio.currentTime, "seek");
   }
@@ -519,6 +556,8 @@ export class TrackStudio {
     this.selectedCueId = null;
     this.zoomStart = 0;
     this.zoomEnd = 0;
+    this.cueOffsetMs = show.cueOffsetMs;
+    this.elements.cueOffset.value = String(show.cueOffsetMs);
     this.elements.cueTime.max = String(show.track.duration);
     this.elements.trackName.textContent = this.file?.name || show.track.filename || "Track not loaded";
     this.elements.trackMeta.textContent = this.file
@@ -564,6 +603,7 @@ export class TrackStudio {
         file: this.file || this.expectedTrack,
         duration,
         cues: this.cues,
+        cueOffsetMs: this.cueOffsetMs,
       });
       downloadJson(`${safeFilename(show.title)}.candybong.json`, show);
       this.setStatus(`Exported ${show.cues.length} cues. The audio file is not embedded.`);

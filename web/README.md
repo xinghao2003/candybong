@@ -38,7 +38,7 @@ Solid-color brightness is a separate 0–10 value. Displayed colors can differ f
 Track Studio authors repeatable light shows for a specific song entirely in the browser:
 
 1. Import a browser-playable audio file. The file stays on the device; Web Audio only decodes it locally to draw the waveform.
-2. Seek with the audio controls, or click and drag the waveform. Zoom with the − / + / Fit buttons or scroll over the waveform; the window anchors at the playhead (buttons) or the cursor (scroll), and cue markers and the playhead follow the zoom. During playback the window pans to keep the playhead visible. Ctrl+scroll is intentionally left to the browser, which reserves it for whole-page zoom.
+2. Seek with the audio controls, or click and drag the waveform. Zoom with the − / + / Fit buttons or scroll over the waveform; the window anchors at the playhead (buttons) or the cursor (scroll), and cue markers and the playhead follow the zoom. Right-drag (or middle-drag) on the waveform pans the zoomed window. During playback the window pans to keep the playhead visible. Ctrl+scroll is intentionally left to the browser, which reserves it for whole-page zoom.
 3. Choose a solid color, off command, or firmware animation and add it at the current timestamp. The cue time field always follows the playhead, so you can scrub to the next moment and add another cue right away.
 4. Select a cue from the waveform or cue list to edit its time and parameters. Drag a cue marker along the waveform to move it to a new timestamp (the audio seeks along so you can hear the new position).
 5. Play the track to preview the sequence. If a Candybong is connected, each cue is also written over Bluetooth; otherwise the on-page light is updated as a visual preview.
@@ -54,11 +54,20 @@ https://example.com/candybong/?show=shows/my-song.candybong.json
 
 The app loads the JSON and the track filename recorded inside it from the same web origin. Same-origin loading is intentional: it avoids silently sending show viewers to third-party audio hosts. Only publish music you have permission to distribute.
 
-Track playback should remain in the foreground for the most consistent timing. Bluetooth writes have device and browser latency, so a configurable cue offset and calibration pass are recommended before using a show in a venue.
+Track playback should remain in the foreground for the most consistent timing. Bluetooth writes have device and browser latency, so the **cue offset** control in the timeline toolbar sends each cue early by the configured number of milliseconds — a cue at 10.2 s with a 300 ms offset fires when the playhead reaches 9.9 s, so the light changes with the music. Calibrate the value with the Latency Lab panel (perceived-effect result minus your reaction time is a good starting point), and the offset is stored in the exported show file so each venue's calibration travels with the show. Seeking still previews correctly under the offset schedule: a seek that lands between a cue's effective time and its real timestamp re-fires the overdue cue.
 
 The Factory Palette Lab sends the device-defined color command `ff 15 00 II`, where `II` ranges from `00` through `1b`. Nine physically observed member-color candidates are included as provisional labels: Dahyun `00`, Chaeyoung `01`, Jihyo `02`, Jeongyeon `09`, Mina `0b`, Nayeon `0e`, Tzuyu `14`, Sana `16`, and Momo `1b`. These are not an official firmware mapping and can be confirmed or replaced in the lab. User observations are saved in browser local storage under `candybong-factory-palette-v1` and take precedence over the provisional labels.
 
 The optional Diagnostics panel records transmitted command bytes and listens for responses on Nordic UART characteristic `6e400003-b5a3-f393-e0a9-e50e24dcca9e`. Notification setup is non-fatal: if the response endpoint is absent or does not support notifications, normal command control remains available and the panel reports RX as unavailable.
+
+## Latency Lab
+
+The Latency Lab panel (above Diagnostics) measures command-to-effect delay with two mechanisms:
+
+- **Bluetooth round-trip** sends five alternating color probes and times each one twice: the *write* time (how long the device takes to acknowledge the ATT write) and, when the device sends response notifications, the *RX echo* time from TX write to the response arriving. This is derived entirely from the TX/RX traffic the Diagnostics log records, and covers the Bluetooth path only — not the LED's own reaction time. Probes with no response are reported as "no echo".
+- **Perceived effect** flashes the light white after a short random delay (700–2000 ms so the tap cannot be anticipated) and measures how long until you tap the button. The result includes human reaction time (~150–250 ms), so subtract your personal reaction time when planning choreography. Results accumulate as last / best / average across taps.
+
+Both tests pause track playback and music-reactive mode first, restore the previous light state afterwards, and log their TX packets (and any RX echoes) in the Diagnostics log. Disconnecting mid-test cancels and cleans up the pending probe.
 
 Important: opening `http://192.168.x.x:4173/` from the phone is not a secure context, so Bluetooth will be unavailable. For USB-local debugging, enable Android USB debugging and run `adb reverse tcp:4173 tcp:4173`, then open `http://localhost:4173/` on the phone. Otherwise use an HTTPS tunnel or HTTPS hosting.
 
