@@ -2,6 +2,8 @@ import { LIGHTSTICK_ADAPTERS, adapterForDevice, bluetoothRequestOptions } from "
 import { MicrophoneReactiveController, microphoneErrorMessage, microphoneSupportMessage } from "./music-reactive.js";
 import { cueModeLabel } from "./show-format.js";
 import { TrackStudio } from "./track-studio.js";
+import { BlinkLab } from "./blink-lab.js";
+import { CameraLumaTracker, cameraErrorMessage, cameraSupportMessage } from "./camera-luma.js";
 
 const defaultAdapter = LIGHTSTICK_ADAPTERS[0];
 const FACTORY_PALETTE_STORAGE_KEY = "candybong-factory-palette-v1";
@@ -23,6 +25,8 @@ const LATENCY_RX_TIMEOUT_MS = 1000;
 const LATENCY_FLASH_MIN_DELAY_MS = 700;
 const LATENCY_FLASH_MAX_DELAY_MS = 2000;
 const LATENCY_TAP_TIMEOUT_MS = 10000;
+const LATENCY_CAMERA_TIMEOUT_MS = 4000;
+const LATENCY_CAMERA_SETTLE_MS = 400;
 const MUSIC_WRITE_INTERVAL_MS = 125;
 const MUSIC_DIAGNOSTIC_INTERVAL_MS = 1000;
 const MUSIC_MODE_LABELS = {
@@ -68,6 +72,17 @@ const state = {
     restoreColor: "#ff5fa2",
     restoreBrightness: 10,
     wasPoweredOff: false,
+    cameraTracker: null,
+    cameraOn: false,
+    cameraTestActive: false,
+    pendingRise: null,
+    pendingRiseTimer: null,
+    pendingRestore: null,
+    pendingRestoreTimer: null,
+    flashWriteAt: null,
+    restoreWriteAt: null,
+    flashOnMs: null,
+    flashOffMs: null,
   },
   poweredOff: false,
   sending: false,
@@ -91,6 +106,7 @@ const state = {
 };
 
 let trackStudio = null;
+let blinkLab = null;
 let timelineWriteChain = Promise.resolve();
 
 const elements = {
@@ -152,6 +168,10 @@ const elements = {
   latencyProbeSummary: document.querySelector("#latencyProbeSummary"),
   latencyTapButton: document.querySelector("#latencyTapButton"),
   latencyTapResult: document.querySelector("#latencyTapResult"),
+  latencyCameraButton: document.querySelector("#latencyCameraButton"),
+  latencyFlashButton: document.querySelector("#latencyFlashButton"),
+  latencyFlashVideo: document.querySelector("#latencyFlashVideo"),
+  latencyFlashResult: document.querySelector("#latencyFlashResult"),
   diagnosticLog: document.querySelector("#diagnosticLog"),
   diagnosticEmpty: document.querySelector("#diagnosticEmpty"),
   clearDiagnosticsButton: document.querySelector("#clearDiagnosticsButton"),
@@ -201,6 +221,7 @@ function setControlsDisabled(disabled) {
   elements.sceneButtons.forEach((button) => { button.disabled = disabled; });
   updateMusicControls(disabled);
   updateLatencyControls();
+  blinkLab?.setConnected(!disabled);
 }
 
 function setConnectionStatus(connected, message = "") {
@@ -358,9 +379,14 @@ function setLatencyStatus(message, style = null) {
 
 function updateLatencyControls() {
   const baseLocked = !isConnected() || state.sending || state.latency.running;
-  elements.latencyRunProbesButton.disabled = baseLocked || state.latency.tapActive;
-  elements.latencyTapButton.disabled = baseLocked || (state.latency.tapActive && state.latency.flashStartedAt == null);
-  if (!state.latency.running && !state.latency.tapActive) {
+  const cameraLocked = state.latency.tapActive || state.latency.cameraTestActive;
+  elements.latencyRunProbesButton.disabled = baseLocked || cameraLocked;
+  elements.latencyTapButton.disabled = baseLocked || cameraLocked || (state.latency.tapActive && state.latency.flashStartedAt == null);
+  elements.latencyCameraButton.disabled = baseLocked || cameraLocked;
+  elements.latencyCameraButton.textContent = state.latency.cameraOn ? "Stop camera" : "Start camera";
+  elements.latencyFlashButton.disabled = baseLocked || cameraLocked || !state.latency.cameraOn;
+  elements.latencyFlashButton.textContent = state.latency.cameraTestActive ? "Testing…" : "Run flash test";
+  if (!state.latency.running && !state.latency.tapActive && !state.latency.cameraTestActive) {
     setLatencyStatus(isConnected() ? "Ready" : "Not connected", null);
   }
 }
@@ -379,6 +405,7 @@ function cancelLatencyTests() {
   state.latency.tapActive = false;
   elements.latencyTapButton.classList.remove("armed");
   elements.latencyTapButton.textContent = "Start test";
+  cancelCameraFlashTest();
   updateLatencyControls();
 }
 
@@ -566,6 +593,126 @@ function renderLatencyTapResult() {
   const best = Math.round(Math.min(...taps));
   const avg = Math.round(taps.reduce((sum, time) => sum + time, 0) / taps.length);
   elements.latencyTapResult.textContent = `Last ${last} ms · best ${best} ms · avg ${avg} ms (${taps.length} ${taps.length === 1 ? "tap" : "taps"})`;
+}
+
+// Camera flash test: the camera watches the lightstick while it flashes white,
+// timing the write until the visible change. The settle write before the flash
+// puts the light on a steady color so the flash is the only edge the camera sees.
+function cameraFlashSample(sample) {
+  if (!state.latency.cameraTestActive) return;
+  if (state.latency.pendingRise && sample.edge === "rise") {
+    state.latency.pendingRise = null;
+    window.clearTimeout(state.latency.pendingRiseTimer);
+    state.latency.flashOnMs = Math.max(0, sample.edgeAt - state.latency.flashWriteAt);
+    sendLatencyFlashRestore();
+  } else if (state.latency.pendingRestore && sample.edge === "fall") {
+    state.latency.pendingRestore = null;
+    window.clearTimeout(state.latency.pendingRestoreTimer);
+    state.latency.flashOffMs = Math.max(0, sample.edgeAt - state.latency.restoreWriteAt);
+    finishCameraFlashTest();
+  }
+}
+
+function sendLatencyFlashRestore() {
+  if (!isConnected()) {
+    finishCameraFlashTest();
+    return;
+  }
+  const packet = state.latency.wasPoweredOff
+    ? state.adapter.commands.powerOff()
+    : state.adapter.commands.staticColor(state.latency.restoreColor, state.latency.restoreBrightness);
+  state.latency.restoreWriteAt = performance.now();
+  addDiagnostic("TX", state.latency.wasPoweredOff ? "Latency flash restore · power off" : "Latency flash restore · color", packet, "tx");
+  writeCharacteristic(packet, false).catch((error) => console.error(error));
+  state.latency.pendingRestore = true;
+  state.latency.pendingRestoreTimer = window.setTimeout(() => {
+    state.latency.pendingRestore = null;
+    finishCameraFlashTest();
+  }, LATENCY_CAMERA_TIMEOUT_MS);
+}
+
+async function runCameraFlashTest() {
+  if (!isConnected() || state.latency.running || state.latency.tapActive || state.latency.cameraTestActive || !state.latency.cameraOn) return;
+  if (state.color.toLowerCase() === "#ffffff" && state.brightness >= 9) {
+    showToast("The light is already near-white — the flash won't be visible");
+    return;
+  }
+  state.latency.cameraTestActive = true;
+  state.latency.wasPoweredOff = state.poweredOff;
+  state.latency.restoreColor = state.color;
+  state.latency.restoreBrightness = state.brightness;
+  state.latency.flashOnMs = null;
+  state.latency.flashOffMs = null;
+  state.latency.pendingRise = null;
+  state.latency.pendingRestore = null;
+  updateLatencyControls();
+  elements.latencyFlashResult.textContent = "Settling…";
+  await latencyPreamble();
+  if (!isConnected()) {
+    cancelCameraFlashTest();
+    return;
+  }
+
+  if (!state.latency.wasPoweredOff) {
+    const settlePacket = state.adapter.commands.staticColor(state.latency.restoreColor, state.latency.restoreBrightness);
+    addDiagnostic("TX", "Latency flash settle · steady color", settlePacket, "tx");
+    writeCharacteristic(settlePacket, false).catch((error) => console.error(error));
+  }
+  await new Promise((resolve) => window.setTimeout(resolve, LATENCY_CAMERA_SETTLE_MS));
+  if (!isConnected()) {
+    cancelCameraFlashTest();
+    return;
+  }
+
+  state.latency.flashWriteAt = performance.now();
+  const flashPacket = state.adapter.commands.staticColor("#ffffff", 10);
+  addDiagnostic("TX", "Latency flash · white (camera)", flashPacket, "tx");
+  writeCharacteristic(flashPacket, false).catch((error) => {
+    console.error(error);
+    cancelCameraFlashTest();
+  });
+  state.latency.pendingRise = true;
+  state.latency.pendingRiseTimer = window.setTimeout(() => {
+    if (state.latency.pendingRise) {
+      state.latency.pendingRise = null;
+      finishCameraFlashTest();
+    }
+  }, LATENCY_CAMERA_TIMEOUT_MS);
+  elements.latencyFlashResult.textContent = "Waiting for the flash…";
+  setLatencyStatus("Camera flash test…", "listening");
+}
+
+function finishCameraFlashTest() {
+  state.latency.cameraTestActive = false;
+  window.clearTimeout(state.latency.pendingRiseTimer);
+  window.clearTimeout(state.latency.pendingRestoreTimer);
+  const parts = [];
+  if (state.latency.flashOnMs != null) parts.push(`flash on ${Math.round(state.latency.flashOnMs)} ms`);
+  else parts.push("flash not seen");
+  if (state.latency.flashOffMs != null) parts.push(`restore ${Math.round(state.latency.flashOffMs)} ms`);
+  elements.latencyFlashResult.textContent = `Last test: ${parts.join(" · ")}`;
+  addDiagnostic("SYS", `Camera latency: ${parts.join(", ")}`, null, "status");
+  state.latency.pendingRise = null;
+  state.latency.pendingRestore = null;
+  state.latency.flashWriteAt = null;
+  state.latency.restoreWriteAt = null;
+  updateLatencyControls();
+  setLatencyStatus(isConnected() ? "Ready" : "Not connected", null);
+}
+
+function cancelCameraFlashTest() {
+  const wasActive = state.latency.cameraTestActive;
+  const restoreNeeded = wasActive && state.latency.flashWriteAt != null && !state.latency.pendingRestore;
+  state.latency.cameraTestActive = false;
+  window.clearTimeout(state.latency.pendingRiseTimer);
+  window.clearTimeout(state.latency.pendingRestoreTimer);
+  state.latency.pendingRise = null;
+  state.latency.pendingRestore = null;
+  state.latency.flashWriteAt = null;
+  state.latency.restoreWriteAt = null;
+  if (restoreNeeded) restoreLatencyFlash();
+  elements.latencyFlashResult.textContent = "Test cancelled";
+  updateLatencyControls();
 }
 
 function activeAdapter() {
@@ -1037,6 +1184,7 @@ function handleDisconnect() {
   stopMusicReactive("Lightstick disconnected");
   clearResponseCharacteristic();
   cancelLatencyTests();
+  blinkLab?.onDisconnected();
   state.adapter = null;
   state.characteristic = null;
   state.sending = false;
@@ -1375,6 +1523,47 @@ elements.clearDiagnosticsButton.addEventListener("click", () => {
 
 elements.latencyRunProbesButton.addEventListener("click", runLatencyProbes);
 
+elements.latencyCameraButton.addEventListener("click", async () => {
+  if (state.latency.cameraTestActive) return;
+  if (state.latency.cameraOn) {
+    state.latency.cameraTracker?.stop();
+    state.latency.cameraOn = false;
+    elements.latencyFlashResult.textContent = "Camera is off";
+    updateLatencyControls();
+    return;
+  }
+  const supportError = cameraSupportMessage();
+  if (supportError) {
+    showToast(supportError);
+    return;
+  }
+  if (!state.latency.cameraTracker) {
+    // The flash test detects a brightness change (color → white), so it uses
+    // the mean signal; the Blink Lab uses the 99th-percentile signal instead.
+    state.latency.cameraTracker = new CameraLumaTracker({
+      signal: "mean",
+      onSample: cameraFlashSample,
+      onEnded: () => {
+        state.latency.cameraOn = false;
+        elements.latencyFlashResult.textContent = "Camera input ended";
+        updateLatencyControls();
+      },
+    });
+  }
+  try {
+    await state.latency.cameraTracker.start(elements.latencyFlashVideo);
+    state.latency.cameraOn = true;
+    elements.latencyFlashResult.textContent = "Camera on — point it at the lightstick";
+    updateLatencyControls();
+  } catch (error) {
+    const message = cameraErrorMessage(error);
+    elements.latencyFlashResult.textContent = message;
+    showToast(message);
+  }
+});
+
+elements.latencyFlashButton.addEventListener("click", runCameraFlashTest);
+
 elements.latencyTapButton.addEventListener("click", () => {
   if (state.latency.flashStartedAt != null) {
     const ms = performance.now() - state.latency.flashStartedAt;
@@ -1415,6 +1604,37 @@ trackStudio = new TrackStudio({
       : "Track playback is running as a visual preview");
   },
   onNotice: showToast,
+});
+
+blinkLab = new BlinkLab({
+  root: document.querySelector("#blinkLabPanel"),
+  getConnected: isConnected,
+  getColor: () => state.color,
+  onColorChange: selectSolidColor,
+  sendBlink: async (color, speed, label) => {
+    if (!isConnected()) {
+      showToast("Connect your Candybong first");
+      return false;
+    }
+    const definition = activeAdapter().customAnimations.blink;
+    const packet = definition.packet({ color, speed });
+    if (await sendPacket(packet, label)) {
+      state.activeScene = null;
+      state.activeFactoryIndex = null;
+      state.activeCustomAnimation = {
+        name: definition.name,
+        description: `Speed ${speed} · set from Blink Lab`,
+        previewEffect: definition.previewEffect,
+        color,
+      };
+      state.poweredOff = false;
+      updatePreview();
+      return true;
+    }
+    return false;
+  },
+  onDiagnostic: addDiagnostic,
+  onToast: showToast,
 });
 
 loadFactoryPalette();

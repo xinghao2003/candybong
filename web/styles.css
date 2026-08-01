@@ -402,6 +402,28 @@ h2 { margin: 5px 0 0; font-size: 18px; line-height: 1.25; letter-spacing: -0.02e
 .latency-summary { margin: 10px 0 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
 .latency-tap-result { margin: 10px 0 0; color: var(--text); font-size: 11px; font-weight: 800; }
 .latency-tap-button.armed { background: var(--pink-dark); animation: status-pulse 0.9s ease-in-out infinite; }
+.blinklab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.blinklab-camera-bar { display: flex; gap: 9px; margin-top: 14px; }
+.blinklab-camera-bar .button:first-child { flex: 1 1 auto; }
+.blinklab-video { display: block; width: 100%; aspect-ratio: 4 / 3; margin-top: 14px; border-radius: 12px; background: #161218; object-fit: cover; }
+.blinklab-video[hidden] { display: none; }
+.blinklab-analysis[hidden] { display: none; }
+.blinklab-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+.blinklab-stat { min-width: 0; padding: 8px 10px; border-radius: 10px; background: #f1edf1; }
+.blinklab-stat span, .blinklab-stat strong { display: block; }
+.blinklab-stat span { color: var(--muted); font-size: 8px; font-weight: 750; text-transform: uppercase; letter-spacing: 0.06em; }
+.blinklab-stat strong { margin-top: 3px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; }
+.blinklab-sweep-actions { display: flex; gap: 9px; }
+.blinklab-sweep-actions .button { flex: 1 1 auto; }
+.blinklab-table { width: 100%; margin-top: 12px; border-collapse: collapse; font-size: 10px; }
+.blinklab-table th, .blinklab-table td { padding: 7px 8px; border-top: 1px solid var(--line); text-align: left; }
+.blinklab-table th { color: var(--muted); font-size: 8px; font-weight: 850; text-transform: uppercase; letter-spacing: 0.08em; }
+.blinklab-table td { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.blinklab-table tr.failed td { color: #b82e4b; }
+.blinklab-table tr.pending td { color: #986510; }
+.blinklab-fit { margin-top: 12px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; line-height: 1.5; }
+.blinklab-mapping-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.blinklab-mapping-row span { color: var(--muted); font-size: 10px; line-height: 1.45; }
 .factory-palette-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 20px; }
 .factory-color-button { min-width: 0; min-height: 62px; padding: 8px 5px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); color: var(--text); cursor: pointer; text-align: center; }
 .factory-color-button:hover { background: var(--surface-soft); }
@@ -470,6 +492,7 @@ footer { color: #978f97; font-size: 10px; text-align: center; }
   .studio-layout { grid-template-columns: 1fr; }
   .studio-cue-sidebar { max-height: none; }
   .latency-grid { grid-template-columns: 1fr; }
+  .blinklab-grid { grid-template-columns: 1fr; }
   .factory-palette-grid { grid-template-columns: repeat(4, 1fr); }
   .factory-editor { grid-template-columns: 1fr; align-items: stretch; }
   .factory-actions .button { flex: 1 1 0; }
@@ -500,6 +523,7 @@ footer { color: #978f97; font-size: 10px; text-align: center; }
   .studio-export-bar .button { width: 100%; }
   .tool-panel > summary { padding: 14px 16px; }
   .tool-panel-content { padding: 16px; }
+  .blinklab-stats { grid-template-columns: repeat(2, 1fr); }
   .tool-status { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .factory-actions { display: grid; grid-template-columns: repeat(3, 1fr); }
   .factory-actions .button { padding-right: 8px; padding-left: 8px; font-size: 10px; }

@@ -62,12 +62,26 @@ The optional Diagnostics panel records transmitted command bytes and listens for
 
 ## Latency Lab
 
-The Latency Lab panel (above Diagnostics) measures command-to-effect delay with two mechanisms:
+The Latency Lab panel (above Diagnostics) measures command-to-effect delay with three mechanisms:
 
 - **Bluetooth round-trip** sends five alternating color probes and times each one twice: the *write* time (how long the device takes to acknowledge the ATT write) and, when the device sends response notifications, the *RX echo* time from TX write to the response arriving. This is derived entirely from the TX/RX traffic the Diagnostics log records, and covers the Bluetooth path only — not the LED's own reaction time. Probes with no response are reported as "no echo".
 - **Perceived effect** flashes the light white after a short random delay (700–2000 ms so the tap cannot be anticipated) and measures how long until you tap the button. The result includes human reaction time (~150–250 ms), so subtract your personal reaction time when planning choreography. Results accumulate as last / best / average across taps.
+- **Camera flash** starts the webcam pointed at the lightstick, flashes the light white, and times the write until the camera sees the visible change (and the restore edge back to the previous color). It covers the Bluetooth path plus the LED's own reaction and excludes human reaction time — but it includes camera capture and frame quantization (~33–100 ms), so treat it as an upper bound. The light is put on a steady color first so the flash is the only brightness change the camera sees.
 
-Both tests pause track playback and music-reactive mode first, restore the previous light state afterwards, and log their TX packets (and any RX echoes) in the Diagnostics log. Disconnecting mid-test cancels and cleans up the pending probe.
+All tests pause track playback and music-reactive mode first, restore the previous light state afterwards, and log their TX packets (and any RX echoes) in the Diagnostics log. Disconnecting mid-test cancels and cleans up the pending probe.
+
+## Blink Lab
+
+The firmware speed value (0–255) of the color-blink command has no documented relationship to how fast the light actually blinks. The Blink Lab (between Latency Lab and Diagnostics) measures the real blink frequency with the webcam and calibrates the speed value against it:
+
+1. Choose a color and speed, then tap **Blink at speed N**. The blink command is sent as usual; the light starts blinking at that speed value.
+2. Tap **Start camera** and point it at the lit lightstick so it fills a good part of the frame; a dim background helps. The frame-brightness meter shows the detected on/off signal, and the stats show the number of blinks, the latest period, and the median rate in blinks/min. Detection uses frame brightness only, so a dark blink color is hard to measure (a warning appears).
+3. **Run sweep** steps through speeds 10 / 40 / 100 / 180 / 255, measuring each for five blink cycles. Higher speed values blink slower, so each row's timeout starts from the previous measured row's period (30 s floor) and extends further as the real periods arrive; rows that still time out are skipped and the sweep continues. A least-squares line is fitted to period vs speed and shown with its R² — the fit needs at least two measured rows.
+4. Once a fit exists, the target-rate slider converts any target blinks/min into a speed value (inverse of the fit, clamped to the 0–255 firmware range) and **Apply target rate** sends that blink command.
+
+The sweep color is captured when the sweep starts and the inputs are locked while it runs. Until a sweep has fitted a line, the target-rate slider uses a built-in piecewise formula fitted to observed candybong behaviour: a shifted rational decay from 617 blinks/min at speed 0 down to 12 at speed 50, then a log-linear tail to 3 blinks/min at speed 255. A successful sweep replaces the built-in formula with your lightstick's own fit — the mapping label shows which is active — and **Reset to default** restores the built-in formula. Everything is analyzed locally in the browser; the video never leaves the device. The calibration is per-device: it depends on the camera's frame rate and exposure as well as the lightstick.
+
+Two camera realities shape the limits of this lab. First, browsers cannot lock camera auto-exposure, so the detector runs on the frame's brightest-percentile luma rather than the average — the lit LED sits near clipping, so exposure changes to the background barely move it (the signal meter still shows average brightness). Second, an edge needs the luma to stay across the threshold for about two camera frames (the debounce adapts to the measured frame rate, and 60 fps is requested when the camera offers it), so a blink's on-time must span roughly three frames to measure: about 50 ms at 60 fps, about 100 ms at 30 fps. Faster speeds show a "changing faster than the camera can see" hint instead of a measurement; slow speeds are covered by the per-row timeout, which extends automatically to fit the measured rate.
 
 Important: opening `http://192.168.x.x:4173/` from the phone is not a secure context, so Bluetooth will be unavailable. For USB-local debugging, enable Android USB debugging and run `adb reverse tcp:4173 tcp:4173`, then open `http://localhost:4173/` on the phone. Otherwise use an HTTPS tunnel or HTTPS hosting.
 

@@ -489,7 +489,7 @@
           <span class="tool-status" id="latencyStatus">Not connected</span>
         </summary>
         <div class="tool-panel-content">
-          <p class="tool-description">Two ways to measure how long a command takes to reach the lightstick: an automatic Bluetooth round-trip probe, and a tap test for the delay you actually see.</p>
+          <p class="tool-description">Three ways to measure how long a command takes to reach the lightstick: an automatic Bluetooth round-trip probe, a tap test for the delay you actually see, and a camera-observed flash test that excludes human reaction time.</p>
 
           <div class="latency-grid">
             <div class="latency-card">
@@ -511,6 +511,128 @@
               <p class="latency-card-copy">Watch the lightstick. The light will turn white after a short random delay — tap the button the instant you see it. The result includes your reaction time (~150–250 ms), so subtract that when judging choreography.</p>
               <button class="button button-primary button-wide latency-tap-button" id="latencyTapButton" type="button" disabled>Start test</button>
               <p class="latency-tap-result" id="latencyTapResult" aria-live="polite">Not tested yet</p>
+            </div>
+
+            <div class="latency-card">
+              <div class="latency-card-heading">
+                <strong>Camera flash</strong>
+                <span>Camera-observed · no reaction time</span>
+              </div>
+              <p class="latency-card-copy">The light flashes white and the camera times the write until the visible change. This covers Bluetooth plus the LED, and excludes human reaction time — but it includes camera capture and frame quantization (~33–100 ms), so treat it as an upper bound. Point the camera at the lightstick first.</p>
+              <video class="blinklab-video" id="latencyFlashVideo" muted playsinline autoplay hidden aria-label="Camera preview for the latency flash test"></video>
+              <div class="blinklab-camera-bar">
+                <button class="button button-secondary" id="latencyCameraButton" type="button" disabled>Start camera</button>
+                <button class="button button-primary" id="latencyFlashButton" type="button" disabled>Run flash test</button>
+              </div>
+              <p class="latency-tap-result" id="latencyFlashResult" aria-live="polite">Camera is off</p>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="tool-panel blink-lab-panel" id="blinkLabPanel">
+        <summary>
+          <span>
+            <span class="section-label">BLINK LAB</span>
+            <strong>Speed-to-frequency calibration</strong>
+          </span>
+          <span class="tool-status" id="blinkLabStatus" data-blinklab="status">Camera off</span>
+        </summary>
+        <div class="tool-panel-content">
+          <p class="tool-description">The firmware speed value (0–255) has no documented relationship to how fast the light actually blinks. Point the camera at the lit lightstick and this lab measures its real blink rate at any speed, sweeps several speeds to fit a calibration line, and converts a target blink rate into a speed value — using a built-in formula until a sweep calibrates your own lightstick. Everything is analyzed in this browser.</p>
+
+          <div class="blinklab-grid">
+            <div class="latency-card">
+              <div class="latency-card-heading">
+                <strong>Measure a speed</strong>
+                <span>Camera on the lightstick</span>
+              </div>
+              <p class="latency-card-copy">Pick a color and speed, send the blink, then read the light's real rate. Aim the camera so the lit light fills a good part of the frame; a dim background helps. Speeds too fast for the camera to resolve (on-time below a few frames) show a hint instead of a measurement.</p>
+
+              <label class="inline-color-picker" aria-label="Choose blink color">
+                <input data-blinklab="color" type="color" value="#ff5fa2" />
+                <span class="inline-color-swatch" data-blinklab="colorSwatch"></span>
+                <code data-blinklab="colorHex">#FF5FA2</code>
+              </label>
+
+              <div class="parameter-field">
+                <div class="parameter-heading">
+                  <label for="blinkLabSpeedInput">Speed value</label>
+                  <output data-blinklab="speedValue" for="blinkLabSpeedInput">12 / 255</output>
+                </div>
+                <input class="range" id="blinkLabSpeedInput" data-blinklab="speed" type="range" min="0" max="255" value="12" />
+              </div>
+
+              <button class="button button-primary button-wide" data-blinklab="applySpeed" type="button" disabled>Blink at speed 12</button>
+
+              <div class="blinklab-camera-bar">
+                <button class="button button-secondary" data-blinklab="startCamera" type="button" disabled>Start camera</button>
+                <button class="button button-secondary" data-blinklab="stopCamera" type="button" disabled>Stop</button>
+              </div>
+
+              <video class="blinklab-video" data-blinklab="preview" muted playsinline autoplay hidden aria-label="Camera preview of the lightstick"></video>
+
+              <div class="blinklab-analysis" data-blinklab="analysis" hidden>
+                <div class="music-status-row">
+                  <span class="music-status-dot" data-blinklab="stateDot" aria-hidden="true"></span>
+                  <div>
+                    <strong data-blinklab="signalState">Waiting for signal</strong>
+                    <span data-blinklab="signalDetail">Point the camera at the lightstick</span>
+                  </div>
+                </div>
+
+                <div class="music-meter-group">
+                  <div class="music-meter-heading"><span>Frame brightness</span><output data-blinklab="lumaValue">0%</output></div>
+                  <div class="music-meter" role="meter" aria-label="Camera frame brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-blinklab="lumaMeter">
+                    <span data-blinklab="lumaFill"></span>
+                  </div>
+                </div>
+
+                <div class="blinklab-stats">
+                  <div class="blinklab-stat"><span>Blinks</span><strong data-blinklab="blinkCount">0</strong></div>
+                  <div class="blinklab-stat"><span>Latest period</span><strong data-blinklab="latestPeriod">—</strong></div>
+                  <div class="blinklab-stat"><span>Median rate</span><strong data-blinklab="medianRate">—</strong></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="latency-card">
+              <div class="latency-card-heading">
+                <strong>Calibration sweep</strong>
+                <span>Speed → measured rate</span>
+              </div>
+              <p class="latency-card-copy">Steps through speeds 10 / 40 / 100 / 180 / 255, measures each for five blink cycles, and fits a line to period vs speed. Higher speed values blink slower, so the per-row timeout grows to fit the measured rate. Rows that still time out are skipped; the fit needs at least two measured rows.</p>
+
+              <div class="blinklab-sweep-actions">
+                <button class="button button-primary" data-blinklab="startSweep" type="button" disabled>Run sweep</button>
+                <button class="button button-secondary" data-blinklab="stopSweep" type="button" disabled>Stop</button>
+              </div>
+              <p class="latency-summary" data-blinklab="sweepSummary" aria-live="polite">No sweep yet</p>
+
+              <table class="blinklab-table" data-blinklab="table" hidden>
+                <thead>
+                  <tr><th>Speed</th><th>Period</th><th>Rate</th><th>Result</th></tr>
+                </thead>
+                <tbody data-blinklab="tableBody"></tbody>
+              </table>
+
+              <p class="blinklab-fit" data-blinklab="fitLine" aria-live="polite"></p>
+
+              <div class="blinklab-mapping-row">
+                <span data-blinklab="mappingLabel">Mapping: built-in formula</span>
+                <button class="button button-secondary button-small" data-blinklab="resetMapping" type="button" disabled>Reset to default</button>
+              </div>
+
+              <div class="parameter-field">
+                <div class="parameter-heading">
+                  <label for="blinkLabTargetInput">Target rate (blinks/min)</label>
+                  <output data-blinklab="targetValue" for="blinkLabTargetInput">60</output>
+                </div>
+                <input class="range" id="blinkLabTargetInput" data-blinklab="target" type="range" min="10" max="600" value="60" />
+              </div>
+              <p class="blinklab-fit" data-blinklab="targetLine" aria-live="polite">Built-in formula: target 60 blinks/min → speed 17.</p>
+
+              <button class="button button-primary button-wide" data-blinklab="applyTarget" type="button" disabled>Apply target rate</button>
             </div>
           </div>
         </div>
