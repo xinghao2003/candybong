@@ -638,6 +638,52 @@
         </div>
       </details>
 
+      <details class="tool-panel capture-lab-panel" id="captureLabPanel">
+        <summary>
+          <span>
+            <span class="section-label">CAPTURE LAB</span>
+            <strong>Guided camera capture</strong>
+          </span>
+          <span class="tool-status" data-capture="status">Camera off</span>
+        </summary>
+        <div class="tool-panel-content">
+          <p class="tool-description">A guided capture flow that crops a fixed centered square from the live camera frame, applies a circular mask, and resizes it to 224×224 for detection. Align the Candybong head inside the circle, then capture. Everything runs locally in this browser.</p>
+
+          <div class="latency-card">
+            <div class="latency-card-heading">
+              <strong>Align and capture</strong>
+              <span>Camera on the Candybong</span>
+            </div>
+            <p class="latency-card-copy">The crop square equals the circle's bounding box — exactly what you see inside the circle is what gets captured, so keep the lit head centered. Drag the circle to move it, pinch (or Ctrl+scroll on desktop) to resize it, and Reset to return to the default size and center.</p>
+
+            <div class="capturelab-camera-bar">
+              <button class="button button-secondary" data-capture="startCamera" type="button">Start camera</button>
+              <button class="button button-secondary" data-capture="stopCamera" type="button" disabled>Stop</button>
+            </div>
+
+            <div class="capturelab-frame" data-capture="frame">
+              <video class="capturelab-video" data-capture="preview" muted playsinline autoplay hidden aria-label="Camera preview for Capture Lab"></video>
+              <div class="capturelab-overlay" data-capture="overlay" hidden>
+                <div class="capturelab-dimmer" aria-hidden="true"></div>
+                <div class="capturelab-ring" aria-hidden="true"></div>
+                <span class="capturelab-hint">Drag to move · pinch to resize</span>
+              </div>
+            </div>
+
+            <div class="capturelab-actions">
+              <button class="button button-primary button-wide" data-capture="captureButton" type="button" disabled>Capture frame</button>
+            </div>
+
+            <div class="capturelab-options">
+              <button class="button button-secondary button-small" data-capture="reset" type="button">Reset to default</button>
+            </div>
+
+            <p class="latency-summary" data-capture="resultText" aria-live="polite">No capture yet</p>
+            <canvas class="capturelab-result" data-capture="resultCanvas" width="224" height="224" hidden aria-label="Captured 224×224 result"></canvas>
+          </div>
+        </div>
+      </details>
+
       <details class="tool-panel diagnostics-panel" id="diagnosticsPanel">
         <summary>
           <span>

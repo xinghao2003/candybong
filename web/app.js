@@ -3,6 +3,7 @@ import { MicrophoneReactiveController, microphoneErrorMessage, microphoneSupport
 import { cueModeLabel } from "./show-format.js";
 import { TrackStudio } from "./track-studio.js";
 import { BlinkLab } from "./blink-lab.js";
+import { CaptureGuide } from "./capture-guide.js";
 import { CameraLumaTracker, cameraErrorMessage, cameraSupportMessage } from "./camera-luma.js";
 
 const defaultAdapter = LIGHTSTICK_ADAPTERS[0];
@@ -107,6 +108,7 @@ const state = {
 
 let trackStudio = null;
 let blinkLab = null;
+let captureLab = null;
 let timelineWriteChain = Promise.resolve();
 
 const elements = {
@@ -1635,6 +1637,13 @@ blinkLab = new BlinkLab({
   },
   onDiagnostic: addDiagnostic,
   onToast: showToast,
+});
+
+captureLab = new CaptureGuide({
+  root: document.querySelector("#captureLabPanel"),
+  onDiagnostic: addDiagnostic,
+  onToast: showToast,
+  // onCapture: future detection plugs in here
 });
 
 loadFactoryPalette();
