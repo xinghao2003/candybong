@@ -566,6 +566,15 @@
                 <input class="range" id="blinkLabSpeedInput" data-blinklab="speed" type="range" min="0" max="255" value="12" />
               </div>
 
+              <div class="parameter-field">
+                <div class="parameter-heading">
+                  <label for="blinkLabThresholdInput">Blink threshold</label>
+                  <output data-blinklab="thresholdValue" for="blinkLabThresholdInput">15%</output>
+                </div>
+                <input class="range" id="blinkLabThresholdInput" data-blinklab="threshold" type="range" min="5" max="50" step="5" value="15" />
+              </div>
+              <p class="blinklab-fit">How far the brightness must move past its midpoint to count as a blink. Lower = more sensitive; raise it if background light causes false blinks.</p>
+
               <button class="button button-primary button-wide" data-blinklab="applySpeed" type="button" disabled>Blink at speed 12</button>
 
               <div class="blinklab-camera-bar">

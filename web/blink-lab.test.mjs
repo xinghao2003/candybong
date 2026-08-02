@@ -123,6 +123,26 @@ test("edge detector stays stable under noise without double edges", () => {
   }
 });
 
+test("edge detector margin fraction tunes how large a swing counts", () => {
+  // Swing 100↔50 with the default 0.15 margin (7.5) fires edges; a strict
+  // 0.6 margin (30) keeps the luma inside the dead zone, so nothing counts.
+  const square = (timeMs) => (Math.floor(timeMs / 200) % 2 === 0 ? 100 : 50);
+  const lax = createEdgeDetector({ windowFrames: 90, marginFraction: 0.1 });
+  const { rises: laxRises } = runSimulation(lax, 3000, 16.7, square);
+  assert.ok(laxRises.length >= 3, `loose margin should detect the blink, got ${laxRises.length}`);
+  const strict = createEdgeDetector({ windowFrames: 90, marginFraction: 0.6 });
+  const { rises: strictRises } = runSimulation(strict, 3000, 16.7, square);
+  assert.equal(strictRises.length, 0, "strict margin should reject the small swing");
+  // The fraction is stored on the detector, so the Blink Lab slider can
+  // retune it live without restarting the camera.
+  const mutable = createEdgeDetector({ windowFrames: 90 });
+  const { rises: before } = runSimulation(mutable, 3000, 16.7, square);
+  assert.ok(before.length >= 1, "default margin should fire edges first");
+  mutable.marginFraction = 0.6;
+  const { rises: after } = runSimulation(mutable, 3000, 16.7, square);
+  assert.equal(after.length, 0, "raising the margin mid-run should stop new edges");
+});
+
 test("edge detector reports no-signal for a flat frame", () => {
   const detector = createEdgeDetector({ windowFrames: 90 });
   const states = [];

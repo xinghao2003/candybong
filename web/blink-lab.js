@@ -142,6 +142,8 @@ const ELEMENT_NAMES = [
   "colorHex",
   "speed",
   "speedValue",
+  "threshold",
+  "thresholdValue",
   "applySpeed",
   "startCamera",
   "stopCamera",
@@ -208,6 +210,7 @@ export class BlinkLab {
     this.cameraStartedAt = null;
 
     this.bindEvents();
+    this.updateThreshold();
     this.resetStats();
     this.elements.color.value = getColor?.() || "#ff5fa2";
     this.updateColorDisplay();
@@ -223,6 +226,7 @@ export class BlinkLab {
       this.updateColorDisplay();
     });
     elements.speed.addEventListener("input", () => this.updateSpeedDisplay());
+    elements.threshold.addEventListener("input", () => this.updateThreshold());
     elements.applySpeed.addEventListener("click", () => this.handleApplySpeed());
     elements.startCamera.addEventListener("click", () => this.startCamera());
     elements.stopCamera.addEventListener("click", () => this.stopCamera());
@@ -260,6 +264,14 @@ export class BlinkLab {
     const speed = Number(this.elements.speed.value);
     this.elements.speedValue.textContent = `${speed} / 255`;
     this.elements.applySpeed.textContent = `Blink at speed ${speed}`;
+  }
+
+  // The slider is a percentage of the rolling swing; the detector needs the
+  // fraction. Applied live so tuning takes effect on the very next frame.
+  updateThreshold() {
+    const percent = Number(this.elements.threshold.value);
+    this.tracker.detector.marginFraction = percent / 100;
+    this.elements.thresholdValue.textContent = `${percent}%`;
   }
 
   resetStats() {
@@ -593,6 +605,7 @@ export class BlinkLab {
     this.elements.startSweep.disabled = !connected || !this.cameraOn || sweeping;
     this.elements.stopSweep.disabled = !sweeping;
     this.elements.speed.disabled = sweeping;
+    this.elements.threshold.disabled = sweeping;
     this.elements.color.disabled = sweeping;
     this.updateTargetLine();
   }

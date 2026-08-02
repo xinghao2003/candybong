@@ -67,6 +67,12 @@ export function captureSourceRect(videoWidth, videoHeight, roiFraction = 0.7, po
 // timed at the moment the luma crossed. Returns `swing` (the rolling on/off
 // range) and `lastEdgeAt` so callers can tell "blinking faster than the
 // camera can see" apart from "nothing is changing".
+//
+// `marginFraction` is the share of the swing the luma must move past the
+// threshold midpoint before a transition counts: small values make the
+// detector sensitive to weak changes, large values require a strong swing.
+// It is stored on the detector so callers can retune it live (the Blink Lab
+// exposes it as the blink-threshold slider).
 export function createEdgeDetector(options = {}) {
   const windowFrames = options.windowFrames ?? 90;
   const solidTimeoutMs = options.solidTimeoutMs ?? 3000;
@@ -74,6 +80,7 @@ export function createEdgeDetector(options = {}) {
 
   const detector = {
     confirmMs: options.confirmMs ?? 50,
+    marginFraction: Math.min(1, Math.max(0, options.marginFraction ?? 0.15)),
     history: [],
     signalState: "waiting",
     edgeState: "dark",
@@ -92,7 +99,7 @@ export function createEdgeDetector(options = {}) {
       const high = sorted[Math.floor(sorted.length * 0.8)];
       const swing = high - low;
       const threshold = (low + high) / 2;
-      const margin = Math.max(swing * 0.15, 6);
+      const margin = Math.max(swing * this.marginFraction, 6);
 
       let edge = null;
       let edgeAt = null;
@@ -146,7 +153,7 @@ export function createEdgeDetector(options = {}) {
 // brightness outside the circle never feeds the detector; the labs' alignment
 // guides drive it via setRoi/setPosition.
 export class CameraLumaTracker {
-  constructor({ onSample, onEnded, width = 64, height = 48, signal = "bright", roiFraction = 0.7, positionX = 0.5, positionY = 0.5 } = {}) {
+  constructor({ onSample, onEnded, width = 64, height = 48, signal = "bright", roiFraction = 0.7, positionX = 0.5, positionY = 0.5, marginFraction = 0.15 } = {}) {
     this.onSample = onSample;
     this.onEnded = onEnded;
     this.width = width;
@@ -165,7 +172,7 @@ export class CameraLumaTracker {
     this.startToken = 0;
     this.frameIntervalMs = 0;
     this.lastFrameAt = null;
-    this.detector = createEdgeDetector();
+    this.detector = createEdgeDetector({ marginFraction });
     this.handleTrackEnded = this.handleTrackEnded.bind(this);
     this.sample = this.sample.bind(this);
   }
