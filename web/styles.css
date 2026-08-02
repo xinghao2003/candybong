@@ -405,8 +405,6 @@ h2 { margin: 5px 0 0; font-size: 18px; line-height: 1.25; letter-spacing: -0.02e
 .blinklab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .blinklab-camera-bar { display: flex; gap: 9px; margin-top: 14px; }
 .blinklab-camera-bar .button:first-child { flex: 1 1 auto; }
-.blinklab-video { display: block; width: 100%; aspect-ratio: 4 / 3; margin-top: 14px; border-radius: 12px; background: #161218; object-fit: cover; }
-.blinklab-video[hidden] { display: none; }
 .blinklab-analysis[hidden] { display: none; }
 .blinklab-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
 .blinklab-stat { min-width: 0; padding: 8px 10px; border-radius: 10px; background: #f1edf1; }
@@ -431,19 +429,18 @@ h2 { margin: 5px 0 0; font-size: 18px; line-height: 1.25; letter-spacing: -0.02e
    videoHeight), so the circle (ROI × box side) maps exactly onto the captured
    crop (ROI × min edge). A non-square box silently shrinks the circle below
    the crop. */
-.capturelab-frame { position: relative; aspect-ratio: 1 / 1; margin-top: 14px; border-radius: 12px; overflow: hidden; background: #161218; --roi: 0.7; user-select: none; touch-action: none; cursor: grab; }
-.capturelab-video { display: block; width: 100%; height: 100%; object-fit: cover; }
-.capturelab-video[hidden], .capturelab-overlay[hidden], .capturelab-result[hidden] { display: none; }
-.capturelab-overlay { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.align-guide-frame { position: relative; aspect-ratio: 1 / 1; margin-top: 14px; border-radius: 12px; overflow: hidden; background: #161218; --roi: 0.7; user-select: none; touch-action: none; cursor: grab; }
+.align-guide-video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.align-guide-frame[hidden], .align-guide-video[hidden], .align-guide-dimmer[hidden], .align-guide-ring[hidden], .align-guide-hint[hidden], .capturelab-result[hidden] { display: none; }
 /* --pos-x/--pos-y are set from JS as percentages; 50% = centered. The
    dimmer's 9999px box-shadow is what dims everything outside the circle. */
-.capturelab-dimmer { position: absolute; left: var(--pos-x, 50%); top: var(--pos-y, 50%); transform: translate(-50%, -50%); width: calc(var(--roi) * 100%); aspect-ratio: 1 / 1; border-radius: 50%; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55); }
-.capturelab-ring { position: absolute; left: var(--pos-x, 50%); top: var(--pos-y, 50%); transform: translate(-50%, -50%); width: calc(var(--roi) * 100%); aspect-ratio: 1 / 1; border: 2px solid rgba(255, 255, 255, 0.95); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); }
+.align-guide-dimmer { position: absolute; left: var(--pos-x, 50%); top: var(--pos-y, 50%); transform: translate(-50%, -50%); width: calc(var(--roi) * 100%); aspect-ratio: 1 / 1; border-radius: 50%; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55); pointer-events: none; }
+.align-guide-ring { position: absolute; left: var(--pos-x, 50%); top: var(--pos-y, 50%); transform: translate(-50%, -50%); width: calc(var(--roi) * 100%); aspect-ratio: 1 / 1; border: 2px solid rgba(255, 255, 255, 0.95); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); pointer-events: none; }
+.align-guide-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); padding: 5px 10px; border-radius: 999px; background: rgba(22, 18, 24, 0.72); color: #fff; font-size: 9px; font-weight: 750; letter-spacing: 0.04em; pointer-events: none; }
 /* The frame is the gesture surface (drag / pinch). Pointer hits pass through
-   the overlay (pointer-events: none) to the frame; touch-action: none stops
-   touch drags from scrolling the page. */
-.capturelab-frame.dragging { cursor: grabbing; }
-.capturelab-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); padding: 5px 10px; border-radius: 999px; background: rgba(22, 18, 24, 0.72); color: #fff; font-size: 9px; font-weight: 750; letter-spacing: 0.04em; }
+   the overlay elements (pointer-events: none) to the frame; touch-action:
+   none stops touch drags from scrolling the page. */
+.align-guide-frame.dragging { cursor: grabbing; }
 .capturelab-actions { margin-top: 14px; }
 .capturelab-options { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
 .capturelab-result { display: block; width: 112px; height: 112px; margin-top: 12px; border-radius: 12px; background: #161218; }

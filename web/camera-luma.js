@@ -24,6 +24,41 @@ export function cameraErrorMessage(error) {
   return error?.message || "The camera could not be started.";
 }
 
+// Source rect for the analysis crop: side is roiFraction of the shorter edge;
+// positionX/Y place the square's center as fractions of the visible frame
+// (0.5 = center, matching the CSS alignment circle's position). The center is
+// clamped so the square always stays inside the visible region — the region
+// object-fit: cover shows in a square box. Returns null for degenerate
+// dimensions; throws RangeError when roiFraction or a position is out of
+// range.
+export function captureSourceRect(videoWidth, videoHeight, roiFraction = 0.7, positionX = 0.5, positionY = 0.5) {
+  if (!Number.isFinite(videoWidth) || !Number.isFinite(videoHeight) || videoWidth <= 0 || videoHeight <= 0) {
+    return null;
+  }
+  if (!Number.isFinite(roiFraction) || roiFraction <= 0 || roiFraction > 1) {
+    throw new RangeError("roiFraction must be in (0, 1]");
+  }
+  if (
+    !Number.isFinite(positionX) || !Number.isFinite(positionY) ||
+    positionX < 0 || positionX > 1 || positionY < 0 || positionY > 1
+  ) {
+    throw new RangeError("position must be in [0, 1]");
+  }
+  const minDim = Math.min(videoWidth, videoHeight);
+  const side = Math.max(1, Math.round(roiFraction * minDim));
+  const half = side / 2;
+  const visibleX = (videoWidth - minDim) / 2;
+  const visibleY = (videoHeight - minDim) / 2;
+  const clamp = (value, lo, hi) => Math.min(hi, Math.max(lo, value));
+  const centerX = clamp(visibleX + positionX * minDim, visibleX + half, visibleX + minDim - half);
+  const centerY = clamp(visibleY + positionY * minDim, visibleY + half, visibleY + minDim - half);
+  return {
+    side,
+    sx: Math.floor(centerX - half),
+    sy: Math.floor(centerY - half),
+  };
+}
+
 // Tracks whether the light in frame is on or off, using rolling percentile
 // thresholds so it survives camera auto-exposure drift. A transition is only
 // confirmed after the luma stays across the threshold for `confirmMs` (the
@@ -105,13 +140,21 @@ export function createEdgeDetector(options = {}) {
 // on/off blink measurement, "mean" for brightness changes like the latency
 // white flash. The confirm debounce follows the measured frame interval so
 // fast blinks are still resolvable at the camera's actual frame rate.
+//
+// Analysis is restricted to a centered ROI square (roiFraction of the shorter
+// edge, positionable like the alignment circle it matches) so background
+// brightness outside the circle never feeds the detector; the labs' alignment
+// guides drive it via setRoi/setPosition.
 export class CameraLumaTracker {
-  constructor({ onSample, onEnded, width = 64, height = 48, signal = "bright" } = {}) {
+  constructor({ onSample, onEnded, width = 64, height = 48, signal = "bright", roiFraction = 0.7, positionX = 0.5, positionY = 0.5 } = {}) {
     this.onSample = onSample;
     this.onEnded = onEnded;
     this.width = width;
     this.height = height;
     this.signal = signal;
+    this.roiFraction = roiFraction;
+    this.positionX = positionX;
+    this.positionY = positionY;
     this.active = false;
     this.stream = null;
     this.video = null;
@@ -207,6 +250,19 @@ export class CameraLumaTracker {
     this.onEnded?.();
   }
 
+  // The analysis region: the source square captureSourceRect computes from
+  // the current ROI fraction and circle position — the same geometry the
+  // capture lab crops. Only the luma inside this region feeds the detector,
+  // so background brightness outside the alignment circle is ignored.
+  setRoi(fraction) {
+    this.roiFraction = Math.max(0.01, Math.min(1, fraction));
+  }
+
+  setPosition(positionX, positionY) {
+    this.positionX = positionX;
+    this.positionY = positionY;
+  }
+
   sample(now) {
     if (!this.active || !this.video || !this.context) return;
     const video = this.video;
@@ -222,7 +278,8 @@ export class CameraLumaTracker {
     }
     this.lastFrameAt = now;
 
-    this.context.drawImage(video, 0, 0, this.width, this.height);
+    const source = captureSourceRect(video.videoWidth, video.videoHeight, this.roiFraction, this.positionX, this.positionY);
+    this.context.drawImage(video, source.sx, source.sy, source.side, source.side, 0, 0, this.width, this.height);
     const data = this.context.getImageData(0, 0, this.width, this.height).data;
     const histogram = this.histogram;
     histogram.fill(0);

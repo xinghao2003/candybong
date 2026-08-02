@@ -4,6 +4,7 @@
 // --test; the BlinkLab class owns the panel DOM via data-blinklab attributes.
 
 import { CameraLumaTracker, cameraErrorMessage, cameraSupportMessage } from "./camera-luma.js";
+import { AlignmentGuide } from "./align-guide.js";
 
 export const SWEEP_SPEEDS = [10, 40, 100, 180, 255];
 export const SWEEP_CYCLES_NEEDED = 5;
@@ -145,6 +146,8 @@ const ELEMENT_NAMES = [
   "startCamera",
   "stopCamera",
   "preview",
+  "previewFrame",
+  "resetGuide",
   "analysis",
   "stateDot",
   "signalState",
@@ -193,6 +196,15 @@ export class BlinkLab {
       onSample: (sample) => this.handleSample(sample),
       onEnded: () => this.stopCamera("Camera input ended"),
     });
+    // The alignment circle and the analysis ROI are one and the same: the
+    // tracker measures only the luma inside the circle, so background light
+    // outside it never disturbs the blink signal.
+    this.guide = new AlignmentGuide({
+      frame: this.elements.previewFrame,
+      hint: "Center the lit head in the circle · drag to move, pinch to resize",
+      onRoiChange: (roi) => this.tracker.setRoi(roi),
+      onPositionChange: (x, y) => this.tracker.setPosition(x, y),
+    });
     this.cameraStartedAt = null;
 
     this.bindEvents();
@@ -214,6 +226,7 @@ export class BlinkLab {
     elements.applySpeed.addEventListener("click", () => this.handleApplySpeed());
     elements.startCamera.addEventListener("click", () => this.startCamera());
     elements.stopCamera.addEventListener("click", () => this.stopCamera());
+    elements.resetGuide.addEventListener("click", () => this.guide.reset());
     elements.startSweep.addEventListener("click", () => this.startSweep());
     elements.stopSweep.addEventListener("click", () => this.cancelSweep("Sweep stopped by user"));
     elements.target.addEventListener("input", () => this.updateTargetLine());
@@ -310,6 +323,7 @@ export class BlinkLab {
     }
     try {
       await this.tracker.start(this.elements.preview);
+      this.guide.setVisible(true);
       this.cameraOn = true;
       this.cameraStartedAt = performance.now();
       this.elements.analysis.hidden = false;
@@ -325,6 +339,7 @@ export class BlinkLab {
   stopCamera(message = null) {
     const wasOn = this.cameraOn;
     this.tracker.stop();
+    this.guide.setVisible(false);
     this.cameraOn = false;
     this.cameraStartedAt = null;
     this.elements.analysis.hidden = true;
@@ -574,6 +589,7 @@ export class BlinkLab {
     this.elements.applySpeed.disabled = !connected || sweeping;
     this.elements.startCamera.disabled = this.cameraOn || sweeping;
     this.elements.stopCamera.disabled = !this.cameraOn;
+    this.elements.resetGuide.disabled = !this.cameraOn;
     this.elements.startSweep.disabled = !connected || !this.cameraOn || sweeping;
     this.elements.stopSweep.disabled = !sweeping;
     this.elements.speed.disabled = sweeping;

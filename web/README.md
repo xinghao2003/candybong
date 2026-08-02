@@ -66,7 +66,7 @@ The Latency Lab panel (above Diagnostics) measures command-to-effect delay with 
 
 - **Bluetooth round-trip** sends five alternating color probes and times each one twice: the *write* time (how long the device takes to acknowledge the ATT write) and, when the device sends response notifications, the *RX echo* time from TX write to the response arriving. This is derived entirely from the TX/RX traffic the Diagnostics log records, and covers the Bluetooth path only — not the LED's own reaction time. Probes with no response are reported as "no echo".
 - **Perceived effect** flashes the light white after a short random delay (700–2000 ms so the tap cannot be anticipated) and measures how long until you tap the button. The result includes human reaction time (~150–250 ms), so subtract your personal reaction time when planning choreography. Results accumulate as last / best / average across taps.
-- **Camera flash** starts the webcam pointed at the lightstick, flashes the light white, and times the write until the camera sees the visible change (and the restore edge back to the previous color). It covers the Bluetooth path plus the LED's own reaction and excludes human reaction time — but it includes camera capture and frame quantization (~33–100 ms), so treat it as an upper bound. The light is put on a steady color first so the flash is the only brightness change the camera sees.
+- **Camera flash** starts the webcam pointed at the lightstick (center it in the adjustable alignment circle — only the luma inside it is watched), flashes the light white, and times the write until the camera sees the visible change (and the restore edge back to the previous color). It covers the Bluetooth path plus the LED's own reaction and excludes human reaction time — but it includes camera capture and frame quantization (~33–100 ms), so treat it as an upper bound. The light is put on a steady color first so the flash is the only brightness change the camera sees.
 
 All tests pause track playback and music-reactive mode first, restore the previous light state afterwards, and log their TX packets (and any RX echoes) in the Diagnostics log. Disconnecting mid-test cancels and cleans up the pending probe.
 
@@ -75,7 +75,7 @@ All tests pause track playback and music-reactive mode first, restore the previo
 The firmware speed value (0–255) of the color-blink command has no documented relationship to how fast the light actually blinks. The Blink Lab (between Latency Lab and Diagnostics) measures the real blink frequency with the webcam and calibrates the speed value against it:
 
 1. Choose a color and speed, then tap **Blink at speed N**. The blink command is sent as usual; the light starts blinking at that speed value.
-2. Tap **Start camera** and point it at the lit lightstick so it fills a good part of the frame; a dim background helps. The frame-brightness meter shows the detected on/off signal, and the stats show the number of blinks, the latest period, and the median rate in blinks/min. Detection uses frame brightness only, so a dark blink color is hard to measure (a warning appears).
+2. Tap **Start camera** and center the lit lightstick inside the alignment circle; a dim background helps. The circle is adjustable like the Capture Lab guide (drag to move, pinch or Ctrl+scroll to resize), and only the luma inside it feeds the detector — background light outside the circle is ignored. The frame-brightness meter shows the detected on/off signal, and the stats show the number of blinks, the latest period, and the median rate in blinks/min. Detection uses brightness only, so a dark blink color is hard to measure (a warning appears).
 3. **Run sweep** steps through speeds 10 / 40 / 100 / 180 / 255, measuring each for five blink cycles. Higher speed values blink slower, so each row's timeout starts from the previous measured row's period (30 s floor) and extends further as the real periods arrive; rows that still time out are skipped and the sweep continues. A least-squares line is fitted to period vs speed and shown with its R² — the fit needs at least two measured rows.
 4. Once a fit exists, the target-rate slider converts any target blinks/min into a speed value (inverse of the fit, clamped to the 0–255 firmware range) and **Apply target rate** sends that blink command.
 
@@ -88,8 +88,10 @@ Important: opening `http://192.168.x.x:4173/` from the phone is not a secure con
 For a quick local preview from the repository root:
 
 ```powershell
-python -m http.server 4173 --bind 127.0.0.1 --directory web
+python serve.py
 ```
+
+The bundled server adds `Cache-Control: no-cache`, so browsers revalidate ES modules on every reload — plain `python -m http.server` can serve stale module files after edits (surfacing as "module does not provide an export named ..." errors).
 
 Then open `http://127.0.0.1:4173/`.
 

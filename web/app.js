@@ -4,6 +4,7 @@ import { cueModeLabel } from "./show-format.js";
 import { TrackStudio } from "./track-studio.js";
 import { BlinkLab } from "./blink-lab.js";
 import { CaptureGuide } from "./capture-guide.js";
+import { AlignmentGuide } from "./align-guide.js";
 import { CameraLumaTracker, cameraErrorMessage, cameraSupportMessage } from "./camera-luma.js";
 
 const defaultAdapter = LIGHTSTICK_ADAPTERS[0];
@@ -74,6 +75,7 @@ const state = {
     restoreBrightness: 10,
     wasPoweredOff: false,
     cameraTracker: null,
+    guide: null,
     cameraOn: false,
     cameraTestActive: false,
     pendingRise: null,
@@ -172,7 +174,9 @@ const elements = {
   latencyTapResult: document.querySelector("#latencyTapResult"),
   latencyCameraButton: document.querySelector("#latencyCameraButton"),
   latencyFlashButton: document.querySelector("#latencyFlashButton"),
+  latencyFlashFrame: document.querySelector("#latencyFlashFrame"),
   latencyFlashVideo: document.querySelector("#latencyFlashVideo"),
+  latencyGuideReset: document.querySelector("#latencyGuideReset"),
   latencyFlashResult: document.querySelector("#latencyFlashResult"),
   diagnosticLog: document.querySelector("#diagnosticLog"),
   diagnosticEmpty: document.querySelector("#diagnosticEmpty"),
@@ -386,6 +390,7 @@ function updateLatencyControls() {
   elements.latencyTapButton.disabled = baseLocked || cameraLocked || (state.latency.tapActive && state.latency.flashStartedAt == null);
   elements.latencyCameraButton.disabled = baseLocked || cameraLocked;
   elements.latencyCameraButton.textContent = state.latency.cameraOn ? "Stop camera" : "Start camera";
+  elements.latencyGuideReset.disabled = !state.latency.cameraOn;
   elements.latencyFlashButton.disabled = baseLocked || cameraLocked || !state.latency.cameraOn;
   elements.latencyFlashButton.textContent = state.latency.cameraTestActive ? "Testing…" : "Run flash test";
   if (!state.latency.running && !state.latency.tapActive && !state.latency.cameraTestActive) {
@@ -1529,6 +1534,7 @@ elements.latencyCameraButton.addEventListener("click", async () => {
   if (state.latency.cameraTestActive) return;
   if (state.latency.cameraOn) {
     state.latency.cameraTracker?.stop();
+    state.latency.guide?.setVisible(false);
     state.latency.cameraOn = false;
     elements.latencyFlashResult.textContent = "Camera is off";
     updateLatencyControls();
@@ -1546,16 +1552,26 @@ elements.latencyCameraButton.addEventListener("click", async () => {
       signal: "mean",
       onSample: cameraFlashSample,
       onEnded: () => {
+        state.latency.guide?.setVisible(false);
         state.latency.cameraOn = false;
         elements.latencyFlashResult.textContent = "Camera input ended";
         updateLatencyControls();
       },
     });
+    // The alignment circle and the analysis ROI are one and the same: the
+    // flash detector watches the mean luma inside the circle only.
+    state.latency.guide = new AlignmentGuide({
+      frame: elements.latencyFlashFrame,
+      hint: "Center the light in the circle · drag to move, pinch to resize",
+      onRoiChange: (roi) => state.latency.cameraTracker?.setRoi(roi),
+      onPositionChange: (x, y) => state.latency.cameraTracker?.setPosition(x, y),
+    });
   }
   try {
     await state.latency.cameraTracker.start(elements.latencyFlashVideo);
+    state.latency.guide?.setVisible(true);
     state.latency.cameraOn = true;
-    elements.latencyFlashResult.textContent = "Camera on — point it at the lightstick";
+    elements.latencyFlashResult.textContent = "Camera on — center it in the circle";
     updateLatencyControls();
   } catch (error) {
     const message = cameraErrorMessage(error);
@@ -1565,6 +1581,8 @@ elements.latencyCameraButton.addEventListener("click", async () => {
 });
 
 elements.latencyFlashButton.addEventListener("click", runCameraFlashTest);
+
+elements.latencyGuideReset.addEventListener("click", () => state.latency.guide?.reset());
 
 elements.latencyTapButton.addEventListener("click", () => {
   if (state.latency.flashStartedAt != null) {

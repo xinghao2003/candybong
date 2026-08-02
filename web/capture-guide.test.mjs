@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CAPTURE_SIZE, captureSourceRect } from "./capture-guide.js";
+import { captureSourceRect } from "./camera-luma.js";
+import { CAPTURE_SIZE } from "./capture-guide.js";
 
 test("captureSourceRect crops the centered square of a landscape frame", () => {
   assert.deepEqual(captureSourceRect(640, 480, 0.7), { side: 336, sx: 152, sy: 72 });

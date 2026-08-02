@@ -518,11 +518,14 @@
                 <strong>Camera flash</strong>
                 <span>Camera-observed · no reaction time</span>
               </div>
-              <p class="latency-card-copy">The light flashes white and the camera times the write until the visible change. This covers Bluetooth plus the LED, and excludes human reaction time — but it includes camera capture and frame quantization (~33–100 ms), so treat it as an upper bound. Point the camera at the lightstick first.</p>
-              <video class="blinklab-video" id="latencyFlashVideo" muted playsinline autoplay hidden aria-label="Camera preview for the latency flash test"></video>
+              <p class="latency-card-copy">The light flashes white and the camera times the write until the visible change. This covers Bluetooth plus the LED, and excludes human reaction time — but it includes camera capture and frame quantization (~33–100 ms), so treat it as an upper bound. Point the camera at the lightstick and center it in the guide circle first.</p>
+              <div class="align-guide-frame" id="latencyFlashFrame">
+                <video class="align-guide-video" id="latencyFlashVideo" muted playsinline autoplay hidden aria-label="Camera preview for the latency flash test"></video>
+              </div>
               <div class="blinklab-camera-bar">
                 <button class="button button-secondary" id="latencyCameraButton" type="button" disabled>Start camera</button>
                 <button class="button button-primary" id="latencyFlashButton" type="button" disabled>Run flash test</button>
+                <button class="button button-secondary button-small" id="latencyGuideReset" type="button" disabled>Reset circle</button>
               </div>
               <p class="latency-tap-result" id="latencyFlashResult" aria-live="polite">Camera is off</p>
             </div>
@@ -547,7 +550,7 @@
                 <strong>Measure a speed</strong>
                 <span>Camera on the lightstick</span>
               </div>
-              <p class="latency-card-copy">Pick a color and speed, send the blink, then read the light's real rate. Aim the camera so the lit light fills a good part of the frame; a dim background helps. Speeds too fast for the camera to resolve (on-time below a few frames) show a hint instead of a measurement.</p>
+              <p class="latency-card-copy">Pick a color and speed, send the blink, then read the light's real rate. Center the lit head in the guide circle; a dim background helps. Drag the circle to move it, pinch (or Ctrl+scroll on desktop) to resize it. Speeds too fast for the camera to resolve (on-time below a few frames) show a hint instead of a measurement.</p>
 
               <label class="inline-color-picker" aria-label="Choose blink color">
                 <input data-blinklab="color" type="color" value="#ff5fa2" />
@@ -568,9 +571,12 @@
               <div class="blinklab-camera-bar">
                 <button class="button button-secondary" data-blinklab="startCamera" type="button" disabled>Start camera</button>
                 <button class="button button-secondary" data-blinklab="stopCamera" type="button" disabled>Stop</button>
+                <button class="button button-secondary button-small" data-blinklab="resetGuide" type="button" disabled>Reset circle</button>
               </div>
 
-              <video class="blinklab-video" data-blinklab="preview" muted playsinline autoplay hidden aria-label="Camera preview of the lightstick"></video>
+              <div class="align-guide-frame" data-blinklab="previewFrame">
+                <video class="align-guide-video" data-blinklab="preview" muted playsinline autoplay hidden aria-label="Camera preview of the lightstick"></video>
+              </div>
 
               <div class="blinklab-analysis" data-blinklab="analysis" hidden>
                 <div class="music-status-row">
@@ -661,13 +667,8 @@
               <button class="button button-secondary" data-capture="stopCamera" type="button" disabled>Stop</button>
             </div>
 
-            <div class="capturelab-frame" data-capture="frame">
-              <video class="capturelab-video" data-capture="preview" muted playsinline autoplay hidden aria-label="Camera preview for Capture Lab"></video>
-              <div class="capturelab-overlay" data-capture="overlay" hidden>
-                <div class="capturelab-dimmer" aria-hidden="true"></div>
-                <div class="capturelab-ring" aria-hidden="true"></div>
-                <span class="capturelab-hint">Drag to move · pinch to resize</span>
-              </div>
+            <div class="align-guide-frame" data-capture="frame">
+              <video class="align-guide-video" data-capture="preview" muted playsinline autoplay hidden aria-label="Camera preview for Capture Lab"></video>
             </div>
 
             <div class="capturelab-actions">
