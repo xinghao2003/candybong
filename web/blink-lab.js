@@ -141,7 +141,7 @@ const ELEMENT_NAMES = [
   "colorSwatch",
   "colorHex",
   "speed",
-  "speedValue",
+  "speedNumber",
   "threshold",
   "thresholdValue",
   "applySpeed",
@@ -226,6 +226,8 @@ export class BlinkLab {
       this.updateColorDisplay();
     });
     elements.speed.addEventListener("input", () => this.updateSpeedDisplay());
+    elements.speedNumber.addEventListener("change", () => this.handleSpeedNumberChange());
+    elements.speedNumber.addEventListener("keydown", (event) => this.handleSpeedNumberKeydown(event));
     elements.threshold.addEventListener("input", () => this.updateThreshold());
     elements.applySpeed.addEventListener("click", () => this.handleApplySpeed());
     elements.startCamera.addEventListener("click", () => this.startCamera());
@@ -262,8 +264,33 @@ export class BlinkLab {
 
   updateSpeedDisplay() {
     const speed = Number(this.elements.speed.value);
-    this.elements.speedValue.textContent = `${speed} / 255`;
+    this.elements.speedNumber.value = String(speed);
     this.elements.applySpeed.textContent = `Blink at speed ${speed}`;
+  }
+
+  // The heading row holds a number entry as a shortcut over the slider.
+  // Committing a valid value (blur or Enter) moves the slider to match;
+  // pressing Enter additionally sends the blink right away, like the apply
+  // button. Empty or non-numeric entries are restored to the current speed,
+  // and out-of-range values clamp to the 0–255 firmware range.
+  handleSpeedNumberChange() {
+    const raw = this.elements.speedNumber.value.trim();
+    const speed = Number(raw);
+    if (raw === "" || !Number.isFinite(speed)) {
+      this.elements.speedNumber.value = this.elements.speed.value;
+      return false;
+    }
+    const clamped = Math.min(255, Math.max(0, Math.round(speed)));
+    this.elements.speedNumber.value = String(clamped);
+    this.elements.speed.value = String(clamped);
+    this.updateSpeedDisplay();
+    return true;
+  }
+
+  handleSpeedNumberKeydown(event) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    if (this.handleSpeedNumberChange()) this.handleApplySpeed();
   }
 
   // The slider is a percentage of the rolling swing; the detector needs the
@@ -605,6 +632,7 @@ export class BlinkLab {
     this.elements.startSweep.disabled = !connected || !this.cameraOn || sweeping;
     this.elements.stopSweep.disabled = !sweeping;
     this.elements.speed.disabled = sweeping;
+    this.elements.speedNumber.disabled = sweeping;
     this.elements.threshold.disabled = sweeping;
     this.elements.color.disabled = sweeping;
     this.updateTargetLine();

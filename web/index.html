@@ -561,7 +561,10 @@
               <div class="parameter-field">
                 <div class="parameter-heading">
                   <label for="blinkLabSpeedInput">Speed value</label>
-                  <output data-blinklab="speedValue" for="blinkLabSpeedInput">12 / 255</output>
+                  <span class="speed-number-field">
+                    <input class="speed-number-input" id="blinkLabSpeedNumber" data-blinklab="speedNumber" type="number" min="0" max="255" step="1" value="12" placeholder="0–255" title="Type a speed and press Enter to blink at it" aria-label="Speed value 0 to 255" />
+                    <span>/ 255</span>
+                  </span>
                 </div>
                 <input class="range" id="blinkLabSpeedInput" data-blinklab="speed" type="range" min="0" max="255" value="12" />
               </div>

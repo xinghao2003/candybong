@@ -301,6 +301,8 @@ h2 { margin: 5px 0 0; font-size: 18px; line-height: 1.25; letter-spacing: -0.02e
 .parameter-field[hidden], .animation-color-field[hidden] { display: none; }
 .parameter-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 4px; color: var(--muted); font-size: 11px; }
 .parameter-heading output { color: var(--text); font-weight: 800; }
+.speed-number-field { display: flex; align-items: center; gap: 6px; color: var(--text); font-weight: 800; }
+.speed-number-input { width: 3.2em; min-height: 26px; padding: 0 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 12px; font-weight: 800; text-align: right; }
 .parameter-field .range { margin-bottom: 0; }
 .animation-summary { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-soft); }
 .summary-heading { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
@@ -493,6 +495,7 @@ footer { color: #978f97; font-size: 10px; text-align: center; }
 .inline-color-picker:focus-within,
 .select-control:focus-visible,
 .text-control:focus-visible,
+.speed-number-input:focus-visible,
 .studio-offset-control input:focus-visible,
 .factory-color-button:focus-visible,
 .studio-zoom-button:focus-visible,
