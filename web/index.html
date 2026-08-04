@@ -267,6 +267,15 @@
               <input class="range" id="animationSpeedInput" type="range" min="0" max="255" value="14" />
             </div>
 
+            <div class="parameter-field" id="animationTargetRateField" hidden>
+              <div class="parameter-heading">
+                <label for="animationTargetRateInput">Target blink rate</label>
+                <output id="animationTargetRateValue" for="animationTargetRateInput">60 blinks/min · speed 17</output>
+              </div>
+              <input class="range" id="animationTargetRateInput" type="range" min="0" max="95" step="1" value="52" />
+              <p class="field-help">Choose one of the 96 usable E1 timing tiers. Firmware speed is calculated from the reverse-engineered E1 timing model.</p>
+            </div>
+
             <div class="parameter-field" id="animationHueField" hidden>
               <div class="parameter-heading">
                 <label for="animationHueInput">Starting hue</label>

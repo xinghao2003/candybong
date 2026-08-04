@@ -1,8 +1,7 @@
-import { LIGHTSTICK_ADAPTERS, adapterForDevice, bluetoothRequestOptions } from "./adapters.js";
+import { LIGHTSTICK_ADAPTERS, adapterForDevice, bluetoothRequestOptions, blinkSpeedForRate } from "./adapters.js";
 import { MicrophoneReactiveController, microphoneErrorMessage, microphoneSupportMessage } from "./music-reactive.js";
 import { cueModeLabel } from "./show-format.js";
 import { TrackStudio } from "./track-studio.js";
-import { BlinkLab } from "./blink-lab.js";
 import { CaptureGuide } from "./capture-guide.js";
 import { AlignmentGuide } from "./align-guide.js";
 import { CameraLumaTracker, cameraErrorMessage, cameraSupportMessage } from "./camera-luma.js";
@@ -41,6 +40,7 @@ const animationSettings = Object.fromEntries(
     mode,
     {
       speed: definition.speed?.defaultValue,
+      targetRate: definition.targetRate?.defaultValue,
       hue: definition.hue?.defaultValue,
       animationId: definition.animationId?.defaultValue,
       colorShift: definition.colorShift?.defaultValue,
@@ -109,7 +109,6 @@ const state = {
 };
 
 let trackStudio = null;
-let blinkLab = null;
 let captureLab = null;
 let timelineWriteChain = Promise.resolve();
 
@@ -143,6 +142,9 @@ const elements = {
   animationSpeedField: document.querySelector("#animationSpeedField"),
   animationSpeedInput: document.querySelector("#animationSpeedInput"),
   animationSpeedValue: document.querySelector("#animationSpeedValue"),
+  animationTargetRateField: document.querySelector("#animationTargetRateField"),
+  animationTargetRateInput: document.querySelector("#animationTargetRateInput"),
+  animationTargetRateValue: document.querySelector("#animationTargetRateValue"),
   animationHueField: document.querySelector("#animationHueField"),
   animationHueInput: document.querySelector("#animationHueInput"),
   animationHueValue: document.querySelector("#animationHueValue"),
@@ -227,7 +229,6 @@ function setControlsDisabled(disabled) {
   elements.sceneButtons.forEach((button) => { button.disabled = disabled; });
   updateMusicControls(disabled);
   updateLatencyControls();
-  blinkLab?.setConnected(!disabled);
 }
 
 function setConnectionStatus(connected, message = "") {
@@ -735,9 +736,12 @@ function currentAnimationSettings() {
 }
 
 function currentAnimationParameters() {
+  const definition = currentAnimationDefinition();
+  const settings = currentAnimationSettings();
   return {
     color: state.color,
-    ...currentAnimationSettings(),
+    ...settings,
+    speed: definition.targetRate ? blinkSpeedForRate(settings.targetRate) : settings.speed,
   };
 }
 
@@ -752,6 +756,9 @@ function setRangeControl(input, output, range, value) {
 }
 
 function customAnimationDescription(definition, settings) {
+  if (definition.targetRate) {
+    return `${definition.description} · ${settings.targetRate} blinks/min · speed ${blinkSpeedForRate(settings.targetRate)}`;
+  }
   if (definition.usesColor) return `${definition.description} · speed ${settings.speed}`;
   if (definition.hue) return `Starting hue ${settings.hue} · speed ${settings.speed}`;
   if (definition.animationId) return `Pattern ${settings.animationId} · speed ${settings.speed}`;
@@ -767,7 +774,8 @@ function updateAnimationBuilder() {
 
   elements.animationMode.value = state.animationMode;
   elements.animationColorField.hidden = !definition.usesColor;
-  elements.animationSpeedField.hidden = !definition.speed;
+  elements.animationSpeedField.hidden = !definition.speed || Boolean(definition.targetRate);
+  elements.animationTargetRateField.hidden = !definition.targetRate;
   elements.animationHueField.hidden = !definition.hue;
   elements.animationIdField.hidden = !definition.animationId;
   elements.colorShiftField.hidden = !definition.colorShift;
@@ -776,6 +784,14 @@ function updateAnimationBuilder() {
   elements.animationColorSwatch.style.background = color;
   elements.animationColorValue.textContent = color;
   setRangeControl(elements.animationSpeedInput, elements.animationSpeedValue, definition.speed, settings.speed);
+  if (definition.targetRate) {
+    const range = definition.targetRate;
+    elements.animationTargetRateInput.min = String(range.minimum);
+    elements.animationTargetRateInput.max = String(range.maximum);
+    elements.animationTargetRateInput.value = String(settings.targetRate);
+    elements.animationTargetRateInput.style.setProperty("--progress", `${((settings.targetRate - range.minimum) / (range.maximum - range.minimum)) * 100}%`);
+    elements.animationTargetRateValue.textContent = `${settings.targetRate} blinks/min · speed ${blinkSpeedForRate(settings.targetRate)}`;
+  }
   setRangeControl(elements.animationHueInput, elements.animationHueValue, definition.hue, settings.hue);
   setRangeControl(elements.animationIdInput, elements.animationIdValue, definition.animationId, settings.animationId);
   setRangeControl(elements.colorShiftInput, elements.colorShiftValue, definition.colorShift, settings.colorShift);
@@ -1191,7 +1207,6 @@ function handleDisconnect() {
   stopMusicReactive("Lightstick disconnected");
   clearResponseCharacteristic();
   cancelLatencyTests();
-  blinkLab?.onDisconnected();
   state.adapter = null;
   state.characteristic = null;
   state.sending = false;
@@ -1430,6 +1445,11 @@ elements.animationSpeedInput.addEventListener("input", (event) => {
   updateAnimationBuilder();
 });
 
+elements.animationTargetRateInput.addEventListener("input", (event) => {
+  currentAnimationSettings().targetRate = Number(event.target.value);
+  updateAnimationBuilder();
+});
+
 elements.animationHueInput.addEventListener("input", (event) => {
   currentAnimationSettings().hue = Number(event.target.value);
   updateAnimationBuilder();
@@ -1624,37 +1644,6 @@ trackStudio = new TrackStudio({
       : "Track playback is running as a visual preview");
   },
   onNotice: showToast,
-});
-
-blinkLab = new BlinkLab({
-  root: document.querySelector("#blinkLabPanel"),
-  getConnected: isConnected,
-  getColor: () => state.color,
-  onColorChange: selectSolidColor,
-  sendBlink: async (color, speed, label) => {
-    if (!isConnected()) {
-      showToast("Connect your Candybong first");
-      return false;
-    }
-    const definition = activeAdapter().customAnimations.blink;
-    const packet = definition.packet({ color, speed });
-    if (await sendPacket(packet, label)) {
-      state.activeScene = null;
-      state.activeFactoryIndex = null;
-      state.activeCustomAnimation = {
-        name: definition.name,
-        description: `Speed ${speed} · set from Blink Lab`,
-        previewEffect: definition.previewEffect,
-        color,
-      };
-      state.poweredOff = false;
-      updatePreview();
-      return true;
-    }
-    return false;
-  },
-  onDiagnostic: addDiagnostic,
-  onToast: showToast,
 });
 
 captureLab = new CaptureGuide({

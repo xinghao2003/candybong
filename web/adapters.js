@@ -65,6 +65,42 @@ function factoryColor(index) {
   return new Uint8Array([0xff, 0x15, 0x00, integerInRange(index, 0, 27, "Factory color index")]);
 }
 
+export function normalizedBlinkSpeed(speed) {
+  const supplied = integerInRange(speed, 0, 255, "Speed");
+  return Math.min(100, supplied < 95 ? supplied + 5 : supplied);
+}
+
+export function blinkRateForSpeed(speed) {
+  const normalized = normalizedBlinkSpeed(speed);
+  const timerTicks = Math.floor((normalized * 32768 + 1000) / 2000);
+  return 491520 / (normalized * timerTicks);
+}
+
+export function blinkSpeedForRate(targetBpm) {
+  const target = Number(targetBpm);
+  if (!Number.isFinite(target) || target <= 0) return null;
+  let bestSpeed = 0;
+  let bestError = Infinity;
+  for (let speed = 0; speed <= 255; speed += 1) {
+    const error = Math.abs(blinkRateForSpeed(speed) - target);
+    if (error < bestError) {
+      bestSpeed = speed;
+      bestError = error;
+    }
+  }
+  return bestSpeed;
+}
+
+// One target-rate tier for every usable normalized E1 value, u = 5..100.
+// This preserves the complete effective firmware range while keeping the UI
+// stepped. The lower supplied speed is chosen for the duplicated u=95..99
+// values created by the firmware's s<95 normalization branch.
+const E1_TARGET_RATE_TIERS = Array.from({ length: 96 }, (_, index) => {
+  const normalized = index + 5;
+  const suppliedSpeed = normalized < 95 ? normalized - 5 : normalized;
+  return blinkRateForSpeed(suppliedSpeed);
+});
+
 export const LIGHTSTICK_ADAPTERS = [
   {
     id: "twice-candybong-infinity",
@@ -76,9 +112,13 @@ export const LIGHTSTICK_ADAPTERS = [
     customAnimations: {
       blink: {
         name: "Color blink",
-        description: "Blink any RGB color",
+        description: "Blink any RGB color at a target rate",
         usesColor: true,
         speed: { minimum: 0, maximum: 255, defaultValue: 12 },
+        targetRate: {
+          tiers: E1_TARGET_RATE_TIERS,
+          defaultValue: 60,
+        },
         previewEffect: "blink",
         packet: ({ color, speed }) => colorEffect(0xe1, speed, color),
       },
