@@ -393,8 +393,8 @@ The light stick used Nordic UART service `6E400001-B5A3-F393_E0A9-E50E24DCCA9E`.
 
 For the detailed timing model of the RGB blink command, see
 [E1 Blink Animation](docs/e1-blink-animation.md).
-For the `FF 13`, `FF 15`, and `FF E6` color paths, palette, RGB/RGBW
-quantization, and LED-group mapping, see
+For the `FF 13`, `FF 14`, `FF 15`, `FF E6`, and `FF E7` color paths, built-in
+animations, palette, RGB/RGBW quantization, and LED-group mapping, see
 [Color Commands](docs/ff13-ff15-e6-color-commands.md).
 For the fade and random-color state machines, see
 [E2/E3/E4 Animations](docs/e2-e3-e4-animations.md).
