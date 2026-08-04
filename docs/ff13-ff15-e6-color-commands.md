@@ -1,4 +1,4 @@
-# `FF 13`, `FF 15`, and `FF E6` Color Commands
+# `FF 13`, `FF 15`, `FF E6`, and `FF E7` Color Commands
 
 This document records the static reverse engineering of the Candybong Infinity
 BLE color commands in firmware image
@@ -18,6 +18,7 @@ The BLE command parser is at firmware address `0x35dc0`,
 FF 13 00 Value
 FF 15 00 PaletteIndex
 FF E6 00 R G B Brightness
+FF E7 Speed Hue
 ```
 
 The Android proof-of-concept uses `Value = 0..255` for `FF 13` and
@@ -66,6 +67,28 @@ The group selector changes which positions receive the color:
 Consequently, “solid color” means solid across the selected LED group, not
 necessarily every LED on the device.
 
+### Inner and outer ring behavior
+
+The hardware has 12 outer RGBW LEDs and 10 inner RGBW LEDs. The firmware uses
+positions `0..0x0b` for the outer ring and `0x0c..0x15` for the inner ring.
+
+The low-level routines can address the rings separately:
+
+| Function | Positions |
+|---|---|
+| `set_only_led_ring_color()` at `0x26e1c` | Outer ring `0..0x0b` |
+| `set_led_inner_ring()` at `0x26ee2` | Inner ring `0x0c..0x15` |
+
+However, `FF E6` carries only one RGB color. Its normal BLE path writes one
+shared RGBW state and calls `set_led_group_color()`. It cannot specify one
+arbitrary color for the outer ring and another arbitrary color for the inner
+ring in the same packet.
+
+The group state can select one ring at a time, so firmware callers can set one
+ring and then the other. The known BLE command list does not expose a separate
+outer-color/inner-color packet. Some preset and animation routines do write
+different values to both rings, but those colors are firmware-defined.
+
 ## `FF 13`: Twice adjustment
 
 The handler stores `Value` in the shared brightness/scaling byte:
@@ -104,6 +127,34 @@ Although the Android client calls this a color shift, the firmware uses the
 value as an 8-bit scaling byte. Values above the normal `0..10` brightness
 range are not linear brightness percentages and can produce non-linear color
 changes after bit-plane encoding.
+
+### Entering mode `0x65`
+
+The BLE `FF 14` handler maps animation ID `9` to the internal preset:
+
+```text
+FF 14 00 09 Speed
+    -> set_led_preset(0x65)
+```
+
+The `Speed` byte is not used by this ID-`9` branch, so a practical packet is:
+
+```text
+FF 14 00 09 00
+```
+
+This path sets the shared brightness byte to `3`, writes the `0x65` preset,
+and clears the active timer flag. To enter the preset and then adjust its
+scaling, send for example:
+
+```text
+FF 14 00 09 00    # select the internal 0x65/Twice preset
+FF 13 00 0A       # reapply it with scaling value 10
+```
+
+The second packet is optional; it changes the preset's shared scaling value.
+The `0x65` mode marker is written by `set_led_preset(0x65)` to the current
+mode state at approximately `0x20006799`.
 
 ## `FF 15`: Built-in solid-color palette
 
@@ -170,6 +221,56 @@ The handler also reads `packet[7]` into auxiliary speed/state. That byte is
 outside the documented seven-byte form `FF E6 00 R G B Brightness`. It does
 not appear to affect the direct solid-color output, but is a firmware/protocol
 quirk worth remembering when constructing packets.
+
+## `FF E7`: Rotate the built-in color pattern
+
+The BLE handler interprets the packet as:
+
+```text
+FF E7 Speed Hue
+```
+
+It stores `Hue` in the shared state byte used by `set_led_color()`:
+
+```text
+color_state[4] = Hue
+```
+
+The firmware does not convert this byte through an HSV hue formula or a color
+lookup table. In this path, `Hue` is effectively the scaling value applied to
+the fixed colors used by the animation. For example, the animation repeatedly
+uses:
+
+```text
+orange       RGB FF 50 00
+red-orange   RGB FF 0A 14
+inner white  W   FF
+```
+
+The fixed pattern is moved around the outer ring. The animation routine writes
+different subsets of outer positions `0..0x0b` with the two RGB colors, then
+advances or decrements an internal frame index. The inner positions
+`0x0c..0x15` are written as white or off according to the group state. Thus
+“rotate” refers primarily to spatial movement around the outer ring, not hue
+rotation through the RGB color wheel.
+
+The speed mapping is:
+
+| Packet speed | Internal state | Behavior |
+|---:|---:|---|
+| `0` | `0x79` | Apply one `0x65`/Twice preset frame; no rotating frame loop |
+| `1` | `0x7b` | Rotate; approximately 250 ms per outer-ring step |
+| `2` | `0x7c` | Rotate; approximately 150 ms per step |
+| `3` | `0x7d` | Rotate; approximately 100 ms per step |
+
+The rotating states use a roughly 10 ms timer callback. The first speed-3
+step can be slightly shorter during initialization. Direction is controlled
+by internal state, not by a field in the `FF E7` packet.
+
+Because `Hue` is fed into the scaling formula, values around `0..10` behave
+most like ordinary brightness values. Larger byte values can produce the
+non-linear bit-plane behavior described below. For example, `FF E7 01 0A`
+means speed `1` with scaling `10`; it does not mean HSV hue `10` degrees.
 
 ## RGB/RGBW quantization algorithm
 
@@ -253,12 +354,17 @@ driver, diffuser, and individual hardware.
 
 | Address | Function or data | Role |
 |---:|---|---|
-| `0x35dc0` | `ble_nus_data_handler` | Parses `FF 13`, `FF 15`, and `FF E6` |
+| `0x35dc0` | `ble_nus_data_handler` | Parses `FF 13`, `FF 15`, `FF E6`, and `FF E7` |
 | `0x2000876e` | Shared color state | RGBW codes and brightness byte |
+| `0x26e1c` | `set_only_led_ring_color` | Writes the outer ring |
+| `0x26ee2` | `set_led_inner_ring` | Writes the inner ring |
 | `0x27038` | `set_led_group_color` | Applies a color to LED groups/positions |
 | `0x316f0` | `set_led_color` | RGBW conversion, quantization, bit-plane output |
 | `0x2b184` | `rf_timer_event_handler` | Dispatches scheduled LED commands |
+| `0x2b800` | `do_led_preset_x65` | Applies one `0x65` preset frame |
+| `0x2b808` | Rotating preset callback | Moves the fixed pattern around the outer ring |
 | `0x2987c` | `set_led_preset` | Includes the `0x65` Twice pattern |
+| `0x39f60` | E7 animation setup | Initializes speed-dependent rotation state |
 
 This document is based on static Ghidra decompilation. Runtime capture or
 photometric measurement would still be required to validate timing, driver
