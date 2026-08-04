@@ -382,7 +382,7 @@ The light stick used Nordic UART service `6E400001-B5A3-F393_E0A9-E50E24DCCA9E`.
   - ff 12 - led off
   - ff 14 00 [01 to 09] [Speed] - animation
   - ff 13 00 [01 to ff] - twice with brightness + color shift adjust
-  - ff 15 00 [00 to 1b] - solid color
+  - ff 15 00 [00 to 1b] - solid color palette
   - ff e1 00 [R] [G] [B] [Speed] - blink color
   - ff e2 00 [R] [G] [B] [Speed] - fade in and out with color
   - ff e3 00 [R] [G] [B] [Speed] - fade in and out with color (slower than e2)
@@ -391,12 +391,19 @@ The light stick used Nordic UART service `6E400001-B5A3-F393_E0A9-E50E24DCCA9E`.
   - ff e7 [speed 0 - 3] [hue] - weird hue + rotate animation
   - ff e9 [payload] - echo with checksum
 
+For the detailed timing model of the RGB blink command, see
+[E1 Blink Animation](docs/e1-blink-animation.md).
+For the `FF 13`, `FF 14`, `FF 15`, `FF E6`, and `FF E7` color paths, built-in
+animations, palette, RGB/RGBW quantization, and LED-group mapping, see
+[Color Commands](docs/ff13-ff15-e6-color-commands.md).
+For the fade and random-color state machines, see
+[E2/E3/E4 Animations](docs/e2-e3-e4-animations.md).
+
 An Android proof-of-concept (PoC) app has been developed for pairing and controlling the light stick over BLE. You can find the app here: [android/CandybongInfinity](android/CandybongInfinity). This application is built upon Google's BluetoothLeGatt connectivity samples.
 
 The app provides users with the ability to change the light stick's LED color and activate various LED animation presets. It's important to note that the app may currently contain some bugs and lacks a polished user experience.
 
 ![Android screenshot](images/android_candybong.png)
-
 ## Blink video collection
 
 `collect_blink_videos.py` collects one Android camera recording for every
