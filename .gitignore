@@ -31,6 +31,11 @@ proguard-project.txt
 .classpath
 .settings/
 
+# Local reverse-engineering scratch files
+.tmp/
+ghidra_work/
+ghidra_scripts/
+
 # Android Studio/IDEA
 *.iml
 .idea
