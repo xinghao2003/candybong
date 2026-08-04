@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#fff7fa" />
+    <meta name="description" content="Control a TWICE Candybong Infinity over Bluetooth." />
+    <title>Candybong Controller</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Candybong Controller home">
+          <span class="brand-mark" aria-hidden="true">C</span>
+          <span>Candybong Controller</span>
+        </a>
+        <div class="connection-status" aria-live="polite">
+          <span class="connection-dot" id="connectionDot" aria-hidden="true"></span>
+          <span id="connectionLabel">Disconnected</span>
+        </div>
+      </header>
+
+      <section class="intro" aria-labelledby="pageTitle">
+        <p class="eyebrow">TWICE CANDYBONG INFINITY</p>
+        <h1 id="pageTitle">Simple lightstick control.</h1>
+        <p>Connect once, then choose a solid color or an animated effect.</p>
+      </section>
+
+      <section class="connection-panel" aria-labelledby="connectionTitle">
+        <div class="connection-icon" aria-hidden="true">B</div>
+        <div class="connection-copy">
+          <h2 id="connectionTitle">Connect your lightstick</h2>
+          <p id="connectionMessage">Turn on your Candybong and keep it nearby.</p>
+          <p class="support-note" id="supportNote">Checking browser support…</p>
+        </div>
+        <button class="button button-primary connect-button" id="connectButton" type="button">Connect Bluetooth</button>
+      </section>
+
+      <div class="controller-layout">
+        <section class="panel preview-panel" aria-labelledby="previewTitle">
+          <div class="panel-heading compact-heading">
+            <div>
+              <p class="section-label">PREVIEW</p>
+              <h2 id="previewTitle">Current light</h2>
+            </div>
+            <span class="mode-badge" id="previewMode">Solid</span>
+          </div>
+
+          <div class="light-preview" id="lightstickVisual" data-effect="solid" style="--light-color: #ff5fa2; --light-alpha: 1">
+            <div class="preview-glow" aria-hidden="true"></div>
+            <div class="preview-disc" aria-hidden="true">
+              <span>TWICE</span>
+            </div>
+          </div>
+
+          <div class="preview-details">
+            <div>
+              <strong id="previewName">Candy pink</strong>
+              <span id="previewDescription">Solid color · brightness 10</span>
+            </div>
+            <code id="hexValue">#FF5FA2</code>
+          </div>
+
+          <div class="command-status" aria-live="polite">
+            <span class="command-dot" aria-hidden="true"></span>
+            <span id="lastCommand">No command sent yet</span>
+          </div>
+        </section>
+
+        <div class="control-stack">
+          <section class="panel" aria-labelledby="powerTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="section-label">POWER</p>
+                <h2 id="powerTitle">Lightstick power</h2>
+              </div>
+            </div>
+            <div class="power-grid">
+              <button class="button button-dark button-large" id="onButton" type="button" disabled>Turn on</button>
+              <button class="button button-secondary button-large" id="offButton" type="button" disabled>Turn off</button>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="colorTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="section-label">SOLID COLOR</p>
+                <h2 id="colorTitle">Color and brightness</h2>
+              </div>
+              <label class="color-picker" aria-label="Choose a custom color">
+                <input id="colorInput" type="color" value="#ff5fa2" />
+                <span class="color-picker-swatch" id="colorSwatch"></span>
+              </label>
+            </div>
+
+            <div class="preset-colors" aria-label="Quick colors">
+              <button class="color-preset active" type="button" data-color="#ff5fa2" aria-label="Candy pink" style="--preset: #ff5fa2"></button>
+              <button class="color-preset" type="button" data-color="#ff4068" aria-label="Red" style="--preset: #ff4068"></button>
+              <button class="color-preset" type="button" data-color="#38c8ff" aria-label="Ocean blue" style="--preset: #38c8ff"></button>
+              <button class="color-preset" type="button" data-color="#8b6cff" aria-label="Purple" style="--preset: #8b6cff"></button>
+              <button class="color-preset" type="button" data-color="#5de2a5" aria-label="Mint" style="--preset: #5de2a5"></button>
+              <button class="color-preset light-preset" type="button" data-color="#ffffff" aria-label="White" style="--preset: #ffffff"></button>
+            </div>
+
+            <div class="brightness-row">
+              <label for="brightnessInput">Brightness</label>
+              <output id="brightnessValue" for="brightnessInput">10 / 10</output>
+            </div>
+            <input class="range" id="brightnessInput" type="range" min="0" max="10" value="10" />
+
+            <button class="button button-primary button-wide" id="applyColorButton" type="button" disabled>Apply solid color</button>
+          </section>
+        </div>
+      </div>
+
+      <section class="panel effects-panel" aria-labelledby="effectsTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="section-label">ANIMATED EFFECTS</p>
+            <h2 id="effectsTitle">Choose an effect</h2>
+          </div>
+          <span class="helper-text">Tap to apply immediately</span>
+        </div>
+
+        <div class="effect-grid">
+          <button class="effect-button" data-scene="pink" type="button" disabled>
+            <span class="effect-swatch pink-effect" aria-hidden="true"></span>
+            <span class="effect-copy"><strong>Pink glow</strong><small>Gentle pink fade</small></span>
+            <span class="effect-check" aria-hidden="true">✓</span>
+          </button>
+          <button class="effect-button" data-scene="ocean" type="button" disabled>
+            <span class="effect-swatch ocean-effect" aria-hidden="true"></span>
+            <span class="effect-copy"><strong>Ocean pulse</strong><small>Blue fade in and out</small></span>
+            <span class="effect-check" aria-hidden="true">✓</span>
+          </button>
+          <button class="effect-button" data-scene="white" type="button" disabled>
+            <span class="effect-swatch white-effect" aria-hidden="true"></span>
+            <span class="effect-copy"><strong>White pulse</strong><small>Slow white fade</small></span>
+            <span class="effect-check" aria-hidden="true">✓</span>
+          </button>
+          <button class="effect-button" data-scene="rainbow" type="button" disabled>
+            <span class="effect-swatch rainbow-effect" aria-hidden="true"></span>
+            <span class="effect-copy"><strong>Rainbow spin</strong><small>Rotating colors</small></span>
+            <span class="effect-check" aria-hidden="true">✓</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel music-panel" aria-labelledby="musicTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="section-label">MUSIC REACTIVE</p>
+            <h2 id="musicTitle">Animate from your microphone</h2>
+          </div>
+          <span class="music-local-badge">LOCAL AUDIO</span>
+        </div>
+
+        <div class="music-layout">
+          <div class="music-controls">
+            <p class="music-description">Play music through a nearby speaker. The browser analyzes the microphone locally and sends only light commands to the Candybong.</p>
+
+            <label class="field-label" for="musicMode">
+              <span>Reactive effect</span>
+              <select class="select-control" id="musicMode">
+                <option value="pulse">Volume pulse</option>
+                <option value="beat">Bass beat flash</option>
+                <option value="spectrum">Spectrum color</option>
+              </select>
+            </label>
+
+            <div class="parameter-field">
+              <div class="parameter-heading">
+                <label for="musicSensitivityInput">Microphone sensitivity</label>
+                <output id="musicSensitivityValue" for="musicSensitivityInput">5 / 10</output>
+              </div>
+              <input class="range" id="musicSensitivityInput" type="range" min="1" max="10" value="5" />
+            </div>
+
+            <div class="parameter-field">
+              <div class="parameter-heading">
+                <label for="musicBrightnessInput">Maximum brightness</label>
+                <output id="musicBrightnessValue" for="musicBrightnessInput">10 / 10</output>
+              </div>
+              <input class="range" id="musicBrightnessInput" type="range" min="1" max="10" value="10" />
+            </div>
+
+            <div class="music-actions">
+              <button class="button button-primary" id="startMusicButton" type="button" disabled>Start listening</button>
+              <button class="button button-secondary" id="stopMusicButton" type="button" disabled>Stop</button>
+            </div>
+            <p class="music-note" id="musicNote">Volume pulse and bass beat use your selected solid color. Keep this page in the foreground while listening.</p>
+          </div>
+
+          <aside class="music-monitor" aria-live="polite">
+            <div class="music-status-row">
+              <span class="music-status-dot" id="musicStatusDot" aria-hidden="true"></span>
+              <div>
+                <strong id="musicStatus">Connect your Candybong</strong>
+                <span id="musicStatusDetail">Microphone is idle</span>
+              </div>
+            </div>
+
+            <div class="music-meter-group">
+              <div class="music-meter-heading"><span>Input level</span><output id="musicLevelValue">0%</output></div>
+              <div class="music-meter" role="meter" aria-label="Microphone input level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="musicLevelMeter">
+                <span id="musicLevelFill"></span>
+              </div>
+            </div>
+
+            <div class="music-meter-group">
+              <div class="music-meter-heading"><span>Bass energy</span><output id="musicBassValue">0%</output></div>
+              <div class="music-meter bass-meter" role="meter" aria-label="Bass energy" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="musicBassMeter">
+                <span id="musicBassFill"></span>
+              </div>
+            </div>
+
+            <div class="beat-indicator" id="musicBeatIndicator">
+              <span aria-hidden="true"></span>
+              <div><strong>Beat detector</strong><small>Waiting for audio</small></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="panel custom-animation-panel" aria-labelledby="customAnimationTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="section-label">CUSTOM ANIMATION</p>
+            <h2 id="customAnimationTitle">Build your own effect</h2>
+          </div>
+          <span class="helper-text">Protocol-safe controls</span>
+        </div>
+
+        <div class="custom-animation-layout">
+          <div class="animation-controls">
+            <label class="field-label" for="animationMode">
+              <span>Animation type</span>
+              <select class="select-control" id="animationMode">
+                <option value="blink">Color blink</option>
+                <option value="pulse" selected>Color pulse</option>
+                <option value="slowPulse">Slow color pulse</option>
+                <option value="randomBlink">Random-color blink</option>
+                <option value="hueSpin">Hue rotation</option>
+                <option value="builtIn">Built-in animation</option>
+                <option value="twiceShift">TWICE color shift · experimental</option>
+              </select>
+            </label>
+
+            <div class="animation-color-field" id="animationColorField">
+              <div>
+                <span class="field-title">Animation color</span>
+                <small>Full 24-bit RGB</small>
+              </div>
+              <label class="inline-color-picker" aria-label="Choose animation color">
+                <input id="animationColorInput" type="color" value="#ff5fa2" />
+                <span class="inline-color-swatch" id="animationColorSwatch"></span>
+                <code id="animationColorValue">#FF5FA2</code>
+              </label>
+            </div>
+
+            <div class="parameter-field" id="animationSpeedField">
+              <div class="parameter-heading">
+                <label for="animationSpeedInput">Speed value</label>
+                <output id="animationSpeedValue" for="animationSpeedInput">14 / 255</output>
+              </div>
+              <input class="range" id="animationSpeedInput" type="range" min="0" max="255" value="14" />
+            </div>
+
+            <div class="parameter-field" id="animationTargetRateField" hidden>
+              <div class="parameter-heading">
+                <label for="animationTargetRateInput">Target blink rate</label>
+                <output id="animationTargetRateValue" for="animationTargetRateInput">60 blinks/min · speed 17</output>
+              </div>
+              <input class="range" id="animationTargetRateInput" type="range" min="0" max="95" step="1" value="52" />
+              <p class="field-help">Choose one of the 96 usable E1 timing tiers. Firmware speed is calculated from the reverse-engineered E1 timing model.</p>
+            </div>
+
+            <div class="parameter-field" id="animationHueField" hidden>
+              <div class="parameter-heading">
+                <label for="animationHueInput">Starting hue</label>
+                <output id="animationHueValue" for="animationHueInput">16 / 255</output>
+              </div>
+              <input class="range" id="animationHueInput" type="range" min="0" max="255" value="16" />
+            </div>
+
+            <div class="parameter-field" id="animationIdField" hidden>
+              <div class="parameter-heading">
+                <label for="animationIdInput">Built-in animation ID</label>
+                <output id="animationIdValue" for="animationIdInput">1 / 9</output>
+              </div>
+              <input class="range" id="animationIdInput" type="range" min="1" max="9" value="1" />
+            </div>
+
+            <div class="parameter-field" id="colorShiftField" hidden>
+              <div class="parameter-heading">
+                <label for="colorShiftInput">Color-shift value</label>
+                <output id="colorShiftValue" for="colorShiftInput">16 / 255</output>
+              </div>
+              <input class="range" id="colorShiftInput" type="range" min="1" max="255" value="16" />
+            </div>
+
+            <button class="button button-primary button-wide" id="applyAnimationButton" type="button" disabled>Apply custom animation</button>
+          </div>
+
+          <aside class="animation-summary" aria-live="polite">
+            <div class="summary-heading">
+              <span class="summary-swatch" id="animationSummarySwatch" aria-hidden="true"></span>
+              <div>
+                <strong id="animationSummaryName">Color pulse</strong>
+                <p id="animationSummaryDescription">Fade any RGB color in and out</p>
+              </div>
+            </div>
+            <div class="packet-preview">
+              <span>Packet preview</span>
+              <code id="animationPacketPreview">FF E2 00 FF 5F A2 0E</code>
+            </div>
+            <dl class="protocol-limits">
+              <div><dt>RGB range</dt><dd>0–255 each</dd></div>
+              <div><dt>RGB colors</dt><dd>16,777,216</dd></div>
+              <div><dt>Solid brightness</dt><dd>0–10</dd></div>
+              <div><dt>Built-in patterns</dt><dd>1–9</dd></div>
+            </dl>
+          </aside>
+        </div>
+      </section>
+
+      <section class="panel track-studio-panel" id="trackStudio" aria-labelledby="trackStudioTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="section-label">TRACK STUDIO</p>
+            <h2 id="trackStudioTitle">Choreograph a song</h2>
+          </div>
+          <span class="music-local-badge">LOCAL AUDIO</span>
+        </div>
+
+        <p class="studio-intro">Import a song, seek to a moment, and add a light cue. Each cue stays active until the next one. Audio is decoded in this browser and is never uploaded.</p>
+
+        <div class="studio-file-bar">
+          <label class="button button-primary studio-file-button">
+            <input data-studio="trackFile" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac,.opus" />
+            Import audio track
+          </label>
+          <label class="button button-secondary studio-file-button">
+            <input data-studio="showFile" type="file" accept="application/json,.json" />
+            Open show JSON
+          </label>
+          <div class="studio-track-copy">
+            <strong data-studio="trackName">No track loaded</strong>
+            <span data-studio="trackMeta">Choose a browser-playable audio file</span>
+          </div>
+        </div>
+
+        <audio class="studio-audio" data-studio="audio" controls preload="metadata" hidden></audio>
+
+        <div class="studio-timeline-shell">
+          <canvas class="studio-waveform" data-studio="waveform" aria-label="Audio waveform and animation cue timeline"></canvas>
+          <div class="studio-zoom-bar">
+            <button class="studio-zoom-button" data-studio="zoomOut" type="button" aria-label="Zoom out" title="Zoom out" disabled>−</button>
+            <output class="studio-zoom-range" data-studio="zoomRange">Full track</output>
+            <button class="studio-zoom-button" data-studio="zoomIn" type="button" aria-label="Zoom in" title="Zoom in" disabled>+</button>
+            <button class="button button-secondary button-small" data-studio="zoomReset" type="button" disabled>Fit</button>
+            <label class="studio-offset-control" title="Send each cue this many milliseconds early so the light changes match the music. Find your value with the Latency Lab panel.">
+              <span>Cue offset</span>
+              <input data-studio="cueOffset" type="number" min="0" max="1000" step="10" value="0" aria-label="Cue offset in milliseconds" />
+              <span>ms</span>
+            </label>
+            <span class="studio-zoom-help">Scroll to zoom · right-drag to pan</span>
+          </div>
+          <div class="studio-time-row">
+            <output data-studio="time">0:00.00</output>
+            <span>Drag to seek · drag a cue marker to move it</span>
+            <output data-studio="duration">0:00.00</output>
+          </div>
+        </div>
+
+        <div class="studio-status" data-studio="status" role="status" aria-live="polite">Import a track to start authoring.</div>
+
+        <div class="studio-layout">
+          <div class="studio-cue-editor">
+            <div class="studio-field-grid">
+              <label class="field-label" for="studioCueTime">
+                <span>Cue time (seconds)</span>
+                <input class="text-control" id="studioCueTime" data-studio="cueTime" type="number" min="0" step="0.01" value="0" />
+              </label>
+              <label class="field-label" for="studioCueMode">
+                <span>Animation</span>
+                <select class="select-control" id="studioCueMode" data-studio="cueMode">
+                  <option value="solid" selected>Solid color</option>
+                  <option value="off">Lights off</option>
+                  <option value="blink">Color blink</option>
+                  <option value="pulse">Color pulse</option>
+                  <option value="slowPulse">Slow color pulse</option>
+                  <option value="randomBlink">Random-color blink</option>
+                  <option value="hueSpin">Hue rotation</option>
+                  <option value="builtIn">Built-in animation</option>
+                  <option value="twiceShift">TWICE color shift · experimental</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="field-label" for="studioCueLabel">
+              <span>Label (optional)</span>
+              <input class="text-control" id="studioCueLabel" data-studio="cueLabel" type="text" maxlength="80" placeholder="Example: chorus starts" />
+            </label>
+
+            <div class="studio-field-grid">
+              <label class="field-label" data-cue-field="solid blink pulse slowPulse" for="studioCueColor">
+                <span>Color</span>
+                <input class="studio-color-control" id="studioCueColor" data-studio="cueColor" type="color" value="#ff5fa2" />
+              </label>
+              <label class="field-label" data-cue-field="solid" for="studioCueBrightness">
+                <span>Brightness (0–10)</span>
+                <input class="text-control" id="studioCueBrightness" data-studio="cueBrightness" type="number" min="0" max="10" step="1" value="10" />
+              </label>
+              <label class="field-label" data-cue-field="blink pulse slowPulse randomBlink hueSpin builtIn" for="studioCueSpeed">
+                <span>Firmware speed (hue rotation: 0–3; others: 0–255)</span>
+                <input class="text-control" id="studioCueSpeed" data-studio="cueSpeed" type="number" min="0" max="255" step="1" value="14" />
+              </label>
+              <label class="field-label" data-cue-field="hueSpin" for="studioCueHue">
+                <span>Starting hue (0–255)</span>
+                <input class="text-control" id="studioCueHue" data-studio="cueHue" type="number" min="0" max="255" step="1" value="16" />
+              </label>
+              <label class="field-label" data-cue-field="builtIn" for="studioCueAnimationId">
+                <span>Pattern ID (1–9)</span>
+                <input class="text-control" id="studioCueAnimationId" data-studio="cueAnimationId" type="number" min="1" max="9" step="1" value="1" />
+              </label>
+              <label class="field-label" data-cue-field="twiceShift" for="studioCueColorShift">
+                <span>Color shift (1–255)</span>
+                <input class="text-control" id="studioCueColorShift" data-studio="cueColorShift" type="number" min="1" max="255" step="1" value="16" />
+              </label>
+            </div>
+
+            <div class="studio-cue-actions">
+              <button class="button button-primary" data-studio="addCue" type="button" disabled>Add cue</button>
+              <button class="button button-secondary" data-studio="updateCue" type="button" disabled>Update selected</button>
+              <button class="button button-secondary" data-studio="deleteCue" type="button" disabled>Delete</button>
+            </div>
+          </div>
+
+          <aside class="studio-cue-sidebar">
+            <div class="studio-cue-heading">
+              <div><span class="section-label">CUE LIST</span><strong>Show sequence</strong></div>
+              <button class="button button-secondary button-small" data-studio="clearCues" type="button" disabled>Clear</button>
+            </div>
+            <p class="studio-cue-empty" data-studio="cueEmpty">No cues yet. Put the playhead on a moment and add one.</p>
+            <ol class="studio-cue-list" data-studio="cueList"></ol>
+          </aside>
+        </div>
+
+        <div class="studio-export-bar">
+          <div>
+            <strong>Portable show file</strong>
+            <span>JSON contains timing and light commands; it does not copy the audio.</span>
+          </div>
+          <button class="button button-dark" data-studio="exportShow" type="button" disabled>Export show JSON</button>
+        </div>
+      </section>
+
+      <details class="tool-panel" id="factoryPalettePanel">
+        <summary>
+          <span>
+            <span class="section-label">FACTORY PALETTE LAB</span>
+            <strong>Test and label 28 device colors</strong>
+          </span>
+          <span class="tool-status" id="factoryPaletteProgress">0 / 28 tested</span>
+        </summary>
+        <div class="tool-panel-content">
+          <p class="tool-description">These colors are generated inside the Candybong and their official names are unknown. Nine member-color indices have provisional labels based on physical observation; select an index, send it to the lightstick, then confirm or replace the label.</p>
+
+          <div class="factory-palette-grid" id="factoryPaletteGrid" aria-label="Factory color indices"></div>
+
+          <div class="factory-editor">
+            <div class="factory-selection">
+              <span>Selected factory color</span>
+              <strong id="factorySelectionName">Index 00</strong>
+              <code id="factoryPacketPreview">FF 15 00 00</code>
+            </div>
+            <label class="field-label" for="factoryColorLabel">
+              <span>Observed color label</span>
+              <input class="text-control" id="factoryColorLabel" type="text" maxlength="32" placeholder="Example: warm white" autocomplete="off" />
+            </label>
+            <div class="factory-actions">
+              <button class="button button-primary" id="testFactoryColorButton" type="button" disabled>Test index 00</button>
+              <button class="button button-secondary" id="saveFactoryLabelButton" type="button">Save label</button>
+              <button class="button button-secondary" id="clearFactoryResultButton" type="button">Clear result</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="tool-panel latency-panel" id="latencyPanel">
+        <summary>
+          <span>
+            <span class="section-label">LATENCY LAB</span>
+            <strong>Command-to-effect delay</strong>
+          </span>
+          <span class="tool-status" id="latencyStatus">Not connected</span>
+        </summary>
+        <div class="tool-panel-content">
+          <p class="tool-description">Three ways to measure how long a command takes to reach the lightstick: an automatic Bluetooth round-trip probe, a tap test for the delay you actually see, and a camera-observed flash test that excludes human reaction time.</p>
+
+          <div class="latency-grid">
+            <div class="latency-card">
+              <div class="latency-card-heading">
+                <strong>Bluetooth round-trip</strong>
+                <span>Automatic · uses TX and RX</span>
+              </div>
+              <p class="latency-card-copy">Sends five alternating color probes. <strong>Write</strong> is how long the device takes to acknowledge the write; <strong>Echo</strong> is how long until its response notification arrives. This measures the Bluetooth path only, not the LED's own reaction time.</p>
+              <button class="button button-primary" id="latencyRunProbesButton" type="button" disabled>Run 5 probes</button>
+              <ol class="latency-probe-list" id="latencyProbeList"></ol>
+              <p class="latency-summary" id="latencyProbeSummary" aria-live="polite">No probes yet</p>
+            </div>
+
+            <div class="latency-card">
+              <div class="latency-card-heading">
+                <strong>Perceived effect</strong>
+                <span>Tap when you see it</span>
+              </div>
+              <p class="latency-card-copy">Watch the lightstick. The light will turn white after a short random delay — tap the button the instant you see it. The result includes your reaction time (~150–250 ms), so subtract that when judging choreography.</p>
+              <button class="button button-primary button-wide latency-tap-button" id="latencyTapButton" type="button" disabled>Start test</button>
+              <p class="latency-tap-result" id="latencyTapResult" aria-live="polite">Not tested yet</p>
+            </div>
+
+            <div class="latency-card">
+              <div class="latency-card-heading">
+                <strong>Camera flash</strong>
+                <span>Camera-observed · no reaction time</span>
+              </div>
+              <p class="latency-card-copy">The light flashes white and the camera times the write until the visible change. This covers Bluetooth plus the LED, and excludes human reaction time — but it includes camera capture and frame quantization (~33–100 ms), so treat it as an upper bound. Point the camera at the lightstick and center it in the guide circle first.</p>
+              <div class="align-guide-frame" id="latencyFlashFrame">
+                <video class="align-guide-video" id="latencyFlashVideo" muted playsinline autoplay hidden aria-label="Camera preview for the latency flash test"></video>
+              </div>
+              <div class="blinklab-camera-bar">
+                <button class="button button-secondary" id="latencyCameraButton" type="button" disabled>Start camera</button>
+                <button class="button button-primary" id="latencyFlashButton" type="button" disabled>Run flash test</button>
+                <button class="button button-secondary button-small" id="latencyGuideReset" type="button" disabled>Reset circle</button>
+              </div>
+              <p class="latency-tap-result" id="latencyFlashResult" aria-live="polite">Camera is off</p>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="tool-panel blink-lab-panel" id="blinkLabPanel">
+        <summary>
+          <span>
+            <span class="section-label">BLINK LAB</span>
+            <strong>Speed-to-frequency calibration</strong>
+          </span>
+          <span class="tool-status" id="blinkLabStatus" data-blinklab="status">Camera off</span>
+        </summary>
+        <div class="tool-panel-content">
+          <p class="tool-description">The firmware speed value (0–255) has no documented relationship to how fast the light actually blinks. Point the camera at the lit lightstick and this lab measures its real blink rate at any speed, sweeps several speeds to fit a calibration line, and converts a target blink rate into a speed value — using a built-in formula until a sweep calibrates your own lightstick. Everything is analyzed in this browser.</p>
+
+          <div class="blinklab-grid">
+            <div class="latency-card">
+              <div class="latency-card-heading">
+                <strong>Measure a speed</strong>
+                <span>Camera on the lightstick</span>
+              </div>
+              <p class="latency-card-copy">Pick a color and speed, send the blink, then read the light's real rate. Center the lit head in the guide circle; a dim background helps. Drag the circle to move it, pinch (or Ctrl+scroll on desktop) to resize it. Speeds too fast for the camera to resolve (on-time below a few frames) show a hint instead of a measurement.</p>
+
+              <label class="inline-color-picker" aria-label="Choose blink color">
+                <input data-blinklab="color" type="color" value="#ff5fa2" />
+                <span class="inline-color-swatch" data-blinklab="colorSwatch"></span>
+                <code data-blinklab="colorHex">#FF5FA2</code>
+              </label>
+
+              <div class="parameter-field">
+                <div class="parameter-heading">
+                  <label for="blinkLabSpeedInput">Speed value</label>
+                  <span class="speed-number-field">
+                    <input class="speed-number-input" id="blinkLabSpeedNumber" data-blinklab="speedNumber" type="number" min="0" max="255" step="1" value="12" placeholder="0–255" title="Type a speed and press Enter to blink at it" aria-label="Speed value 0 to 255" />
+                    <span>/ 255</span>
+                  </span>
+                </div>
+                <input class="range" id="blinkLabSpeedInput" data-blinklab="speed" type="range" min="0" max="255" value="12" />
+              </div>
+
+              <div class="parameter-field">
+                <div class="parameter-heading">
+                  <label for="blinkLabThresholdInput">Blink threshold</label>
+                  <output data-blinklab="thresholdValue" for="blinkLabThresholdInput">15%</output>
+                </div>
+                <input class="range" id="blinkLabThresholdInput" data-blinklab="threshold" type="range" min="5" max="50" step="5" value="15" />
+              </div>
+              <p class="blinklab-fit">How far the brightness must move past its midpoint to count as a blink. Lower = more sensitive; raise it if background light causes false blinks.</p>
+
+              <button class="button button-primary button-wide" data-blinklab="applySpeed" type="button" disabled>Blink at speed 12</button>
+
+              <div class="blinklab-camera-bar">
+                <button class="button button-secondary" data-blinklab="startCamera" type="button" disabled>Start camera</button>
+                <button class="button button-secondary" data-blinklab="stopCamera" type="button" disabled>Stop</button>
+                <button class="button button-secondary button-small" data-blinklab="resetGuide" type="button" disabled>Reset circle</button>
+              </div>
+
+              <div class="align-guide-frame" data-blinklab="previewFrame">
+                <video class="align-guide-video" data-blinklab="preview" muted playsinline autoplay hidden aria-label="Camera preview of the lightstick"></video>
+              </div>
+
+              <div class="blinklab-analysis" data-blinklab="analysis" hidden>
+                <div class="music-status-row">
+                  <span class="music-status-dot" data-blinklab="stateDot" aria-hidden="true"></span>
+                  <div>
+                    <strong data-blinklab="signalState">Waiting for signal</strong>
+                    <span data-blinklab="signalDetail">Point the camera at the lightstick</span>
+                  </div>
+                </div>
+
+                <div class="music-meter-group">
+                  <div class="music-meter-heading"><span>Frame brightness</span><output data-blinklab="lumaValue">0%</output></div>
+                  <div class="music-meter" role="meter" aria-label="Camera frame brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-blinklab="lumaMeter">
+                    <span data-blinklab="lumaFill"></span>
+                  </div>
+                </div>
+
+                <div class="blinklab-stats">
+                  <div class="blinklab-stat"><span>Blinks</span><strong data-blinklab="blinkCount">0</strong></div>
+                  <div class="blinklab-stat"><span>Latest period</span><strong data-blinklab="latestPeriod">—</strong></div>
+                  <div class="blinklab-stat"><span>Median rate</span><strong data-blinklab="medianRate">—</strong></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="latency-card">
+              <div class="latency-card-heading">
+                <strong>Calibration sweep</strong>
+                <span>Speed → measured rate</span>
+              </div>
+              <p class="latency-card-copy">Steps through speeds 10 / 40 / 100 / 180 / 255, measures each for five blink cycles, and fits a line to period vs speed. Higher speed values blink slower, so the per-row timeout grows to fit the measured rate. Rows that still time out are skipped; the fit needs at least two measured rows.</p>
+
+              <div class="blinklab-sweep-actions">
+                <button class="button button-primary" data-blinklab="startSweep" type="button" disabled>Run sweep</button>
+                <button class="button button-secondary" data-blinklab="stopSweep" type="button" disabled>Stop</button>
+              </div>
+              <p class="latency-summary" data-blinklab="sweepSummary" aria-live="polite">No sweep yet</p>
+
+              <table class="blinklab-table" data-blinklab="table" hidden>
+                <thead>
+                  <tr><th>Speed</th><th>Period</th><th>Rate</th><th>Result</th></tr>
+                </thead>
+                <tbody data-blinklab="tableBody"></tbody>
+              </table>
+
+              <p class="blinklab-fit" data-blinklab="fitLine" aria-live="polite"></p>
+
+              <div class="blinklab-mapping-row">
+                <span data-blinklab="mappingLabel">Mapping: built-in formula</span>
+                <button class="button button-secondary button-small" data-blinklab="resetMapping" type="button" disabled>Reset to default</button>
+              </div>
+
+              <div class="parameter-field">
+                <div class="parameter-heading">
+                  <label for="blinkLabTargetInput">Target rate (blinks/min)</label>
+                  <output data-blinklab="targetValue" for="blinkLabTargetInput">60</output>
+                </div>
+                <input class="range" id="blinkLabTargetInput" data-blinklab="target" type="range" min="10" max="600" value="60" />
+              </div>
+              <p class="blinklab-fit" data-blinklab="targetLine" aria-live="polite">Built-in formula: target 60 blinks/min → speed 17.</p>
+
+              <button class="button button-primary button-wide" data-blinklab="applyTarget" type="button" disabled>Apply target rate</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="tool-panel capture-lab-panel" id="captureLabPanel">
+        <summary>
+          <span>
+            <span class="section-label">CAPTURE LAB</span>
+            <strong>Guided camera capture</strong>
+          </span>
+          <span class="tool-status" data-capture="status">Camera off</span>
+        </summary>
+        <div class="tool-panel-content">
+          <p class="tool-description">A guided capture flow that crops a fixed centered square from the live camera frame, applies a circular mask, and resizes it to 224×224 for detection. Align the Candybong head inside the circle, then capture. Everything runs locally in this browser.</p>
+
+          <div class="latency-card">
+            <div class="latency-card-heading">
+              <strong>Align and capture</strong>
+              <span>Camera on the Candybong</span>
+            </div>
+            <p class="latency-card-copy">The crop square equals the circle's bounding box — exactly what you see inside the circle is what gets captured, so keep the lit head centered. Drag the circle to move it, pinch (or Ctrl+scroll on desktop) to resize it, and Reset to return to the default size and center.</p>
+
+            <div class="capturelab-camera-bar">
+              <button class="button button-secondary" data-capture="startCamera" type="button">Start camera</button>
+              <button class="button button-secondary" data-capture="stopCamera" type="button" disabled>Stop</button>
+            </div>
+
+            <div class="align-guide-frame" data-capture="frame">
+              <video class="align-guide-video" data-capture="preview" muted playsinline autoplay hidden aria-label="Camera preview for Capture Lab"></video>
+            </div>
+
+            <div class="capturelab-actions">
+              <button class="button button-primary button-wide" data-capture="captureButton" type="button" disabled>Capture frame</button>
+            </div>
+
+            <div class="capturelab-options">
+              <button class="button button-secondary button-small" data-capture="reset" type="button">Reset to default</button>
+            </div>
+
+            <p class="latency-summary" data-capture="resultText" aria-live="polite">No capture yet</p>
+            <canvas class="capturelab-result" data-capture="resultCanvas" width="224" height="224" hidden aria-label="Captured 224×224 result"></canvas>
+          </div>
+        </div>
+      </details>
+
+      <details class="tool-panel diagnostics-panel" id="diagnosticsPanel">
+        <summary>
+          <span>
+            <span class="section-label">DIAGNOSTICS</span>
+            <strong>Packet and response log</strong>
+          </span>
+          <span class="tool-status" id="responseStatus">Not connected</span>
+        </summary>
+        <div class="tool-panel-content">
+          <div class="diagnostics-toolbar">
+            <p class="tool-description">TX shows commands sent by this page. RX shows notifications received from the Nordic UART response endpoint.</p>
+            <button class="button button-secondary button-small" id="clearDiagnosticsButton" type="button">Clear log</button>
+          </div>
+          <ol class="diagnostic-log" id="diagnosticLog" aria-live="polite">
+            <li class="diagnostic-empty" id="diagnosticEmpty">No packets recorded yet.</li>
+          </ol>
+        </div>
+      </details>
+
+      <details class="help-panel">
+        <summary>Connection help</summary>
+        <div>
+          <p>Use Chrome on Android or a Web Bluetooth browser such as Bluefy on iPhone/iPad. The page must be opened through HTTPS or localhost.</p>
+          <p>If connection fails, keep the lightstick awake, move it close to your phone, and try again.</p>
+        </div>
+      </details>
+
+      <footer>Nordic UART BLE controller</footer>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -152,4 +152,3 @@ So the commands do not share one visible blink frequency:
 | E2 | `0x02` | `0x2b184` case 2 | `0x38fd0` |
 | E3 | `0x03` | `0x2b184` case 3 | `0x38fd0` |
 | E4 | `0x0c` | `0x2b184` case `0x0c` | `0x28650` |
-

@@ -398,3 +398,36 @@ An Android proof-of-concept (PoC) app has been developed for pairing and control
 The app provides users with the ability to change the light stick's LED color and activate various LED animation presets. It's important to note that the app may currently contain some bugs and lacks a polished user experience.
 
 ![Android screenshot](images/android_candybong.png)
+## Blink video collection
+
+`collect_blink_videos.py` collects one Android camera recording for every
+Candybong blink speed from 1 through 255. It connects over BLE, sends the
+white blink packet, taps the Android recording control at `(610, 2370)`, waits
+`clamp(2 * speed, 2, 60)` seconds, and taps the same point again to stop. It
+then waits five seconds for Android to finalize the video before continuing.
+
+Install Bleak and run it while the Android camera app is open:
+
+```powershell
+python -m pip install bleak
+python collect_blink_videos.py
+```
+
+Use `--serial SERIAL` when more than one Android device is connected. The
+`--start-speed` and `--end-speed` options can collect a smaller or resumed
+range. To collect only selected speeds, provide a comma-separated list:
+
+```powershell
+python collect_blink_videos.py --speeds 3,6,7,8
+```
+
+To simulate the camera exposure gesture before each recording, enable the
+two-step action: hold `(610, 1200)` for 1.5 seconds to lock focus, then press
+and drag downward from that point. The script waits 1 second, then drags to
+`(610, 1500)` over 1.5 seconds; adjust those values if the camera app uses a
+different view. Before this focus action, the Candybong is powered off and
+allowed 0.5 seconds to settle:
+
+```powershell
+python collect_blink_videos.py --adjust-exposure --exposure-x 610 --exposure-y 1200 --exposure-distance 300
+```
