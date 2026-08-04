@@ -377,19 +377,13 @@ The light stick used Nordic UART service `6E400001-B5A3-F393_E0A9-E50E24DCCA9E`.
 #### BLE Command Packets
 
 - '@dfu' - put device to DFU mode and show up as 'twiceDFU' (NOTE: have to hold the power button while trigger this command. This is due to HW design)
-- \[Constant: 0xff\] \[opcode\]
-  - ff 11 - led on
-  - ff 12 - led off
-  - ff 14 00 [01 to 09] [Speed] - animation
-  - ff 13 00 [01 to ff] - twice with brightness + color shift adjust
-  - ff 15 00 [00 to 1b] - solid color palette
-  - ff e1 00 [R] [G] [B] [Speed] - blink color
-  - ff e2 00 [R] [G] [B] [Speed] - fade in and out with color
-  - ff e3 00 [R] [G] [B] [Speed] - fade in and out with color (slower than e2)
-  - ff e4 00 00 00 00 [Speed] - blink random color 
-  - ff e6 00 [R] [G] [B] [Brightness] - set solid color
-  - ff e7 [speed 0 - 3] [hue] - weird hue + rotate animation
-  - ff e9 [payload] - echo with checksum
+
+All normal command packets begin with `FF` followed by an opcode. The complete
+firmware inventory, including configuration, frame-streaming, and bridge
+opcodes not used by the current proof of concept, is documented in the
+[Bluetooth command reference](docs/bluetooth-command-reference.md).
+For practical LED and animation experiments, use the narrower
+[safe lighting command allow-list](docs/safe-lighting-commands.md).
 
 For the detailed timing model of the RGB blink command, see
 [E1 Blink Animation](docs/e1-blink-animation.md).
