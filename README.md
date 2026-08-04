@@ -391,6 +391,9 @@ The light stick used Nordic UART service `6E400001-B5A3-F393_E0A9-E50E24DCCA9E`.
   - ff e7 [speed 0 - 3] [hue] - weird hue + rotate animation
   - ff e9 [payload] - echo with checksum
 
+For the detailed timing model of the RGB blink command, see
+[E1 Blink Animation](docs/e1-blink-animation.md).
+
 An Android proof-of-concept (PoC) app has been developed for pairing and controlling the light stick over BLE. You can find the app here: [android/CandybongInfinity](android/CandybongInfinity). This application is built upon Google's BluetoothLeGatt connectivity samples.
 
 The app provides users with the ability to change the light stick's LED color and activate various LED animation presets. It's important to note that the app may currently contain some bugs and lacks a polished user experience.
