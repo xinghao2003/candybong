@@ -393,6 +393,8 @@ The light stick used Nordic UART service `6E400001-B5A3-F393_E0A9-E50E24DCCA9E`.
 
 For the detailed timing model of the RGB blink command, see
 [E1 Blink Animation](docs/e1-blink-animation.md).
+For the fade and random-color state machines, see
+[E2/E3/E4 Animations](docs/e2-e3-e4-animations.md).
 
 An Android proof-of-concept (PoC) app has been developed for pairing and controlling the light stick over BLE. You can find the app here: [android/CandybongInfinity](android/CandybongInfinity). This application is built upon Google's BluetoothLeGatt connectivity samples.
 

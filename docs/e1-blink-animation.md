@@ -157,14 +157,14 @@ frequency of a complete colored-to-black-to-colored cycle.
 
 | Supplied `s` | Normalized `u` | Timer `q` (ticks) | Time per transition | Full cycle | Full-cycle frequency |
 |---:|---:|---:|---:|---:|---:|
-| 0 | 5 | 82 | 5.005 ms | 50.049 ms | 19.98 Hz |
-| 5 | 10 | 164 | 10.010 ms | 200.195 ms | 5.00 Hz |
-| 10 | 15 | 246 | 15.015 ms | 450.439 ms | 2.22 Hz |
-| 16 | 21 | 344 | 20.996 ms | 881.836 ms | 1.13 Hz |
-| 20 | 25 | 410 | 25.024 ms | 1.251 s | 0.799 Hz |
-| 50 | 55 | 901 | 54.993 ms | 6.049 s | 0.165 Hz |
-| 100 | 100 | 1638 | 99.976 ms | 19.995 s | 0.0500 Hz |
-| 255 | 100 | 1638 | 99.976 ms | 19.995 s | 0.0500 Hz |
+| 0 | 5 | 82 | 25.024 ms | 50.049 ms | 19.98 Hz |
+| 5 | 10 | 164 | 100.098 ms | 200.195 ms | 5.00 Hz |
+| 10 | 15 | 246 | 225.220 ms | 450.439 ms | 2.22 Hz |
+| 16 | 21 | 344 | 440.918 ms | 881.836 ms | 1.13 Hz |
+| 20 | 25 | 410 | 625.610 ms | 1.251 s | 0.799 Hz |
+| 50 | 55 | 901 | 3.025 s | 6.049 s | 0.165 Hz |
+| 100 | 100 | 1638 | 9.998 s | 19.995 s | 0.0500 Hz |
+| 255 | 100 | 1638 | 9.998 s | 19.995 s | 0.0500 Hz |
 
 For example, a command whose final byte is decimal `16` uses `u = 21` and
 blinks with a complete cycle of approximately `882 ms`.
@@ -194,4 +194,3 @@ blinks with a complete cycle of approximately `882 ms`.
 | `0x2b184` | Reprograms the timer and dispatches animation callbacks |
 | `0x2f63c` | Counts callbacks and toggles RGB/black |
 | `0x2df94` | Initializes the app timer and RTC configuration |
-
