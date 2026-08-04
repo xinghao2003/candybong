@@ -12,10 +12,10 @@ const FACTORY_MEMBER_PALETTE = Object.freeze({
   0x00: "Dahyun",
   0x01: "Chaeyoung",
   0x02: "Jihyo",
-  0x09: "Jeongyeon",
-  0x0b: "Mina",
-  0x0e: "Nayeon",
-  0x14: "Tzuyu",
+  0x06: "Jeongyeon",
+  0x0d: "Mina",
+  0x10: "Nayeon",
+  0x12: "Tzuyu",
   0x16: "Sana",
   0x1b: "Momo",
 });
@@ -755,9 +755,16 @@ function setRangeControl(input, output, range, value) {
   output.textContent = `${value} / ${range.maximum}`;
 }
 
+function formatBlinkRate(rate) {
+  if (!Number.isFinite(rate)) return "—";
+  if (rate >= 100) return rate.toFixed(1);
+  if (rate >= 10) return rate.toFixed(2);
+  return rate.toFixed(3);
+}
+
 function customAnimationDescription(definition, settings) {
   if (definition.targetRate) {
-    return `${definition.description} · ${settings.targetRate} blinks/min · speed ${blinkSpeedForRate(settings.targetRate)}`;
+    return `${definition.description} · ${formatBlinkRate(settings.targetRate)} blinks/min · speed ${blinkSpeedForRate(settings.targetRate)}`;
   }
   if (definition.usesColor) return `${definition.description} · speed ${settings.speed}`;
   if (definition.hue) return `Starting hue ${settings.hue} · speed ${settings.speed}`;
@@ -785,12 +792,16 @@ function updateAnimationBuilder() {
   elements.animationColorValue.textContent = color;
   setRangeControl(elements.animationSpeedInput, elements.animationSpeedValue, definition.speed, settings.speed);
   if (definition.targetRate) {
-    const range = definition.targetRate;
-    elements.animationTargetRateInput.min = String(range.minimum);
-    elements.animationTargetRateInput.max = String(range.maximum);
-    elements.animationTargetRateInput.value = String(settings.targetRate);
-    elements.animationTargetRateInput.style.setProperty("--progress", `${((settings.targetRate - range.minimum) / (range.maximum - range.minimum)) * 100}%`);
-    elements.animationTargetRateValue.textContent = `${settings.targetRate} blinks/min · speed ${blinkSpeedForRate(settings.targetRate)}`;
+    const tiers = definition.targetRate.tiers;
+    const tierIndex = tiers.reduce((best, tier, index) => (
+      Math.abs(tier - settings.targetRate) < Math.abs(tiers[best] - settings.targetRate) ? index : best
+    ), 0);
+    elements.animationTargetRateInput.min = "0";
+    elements.animationTargetRateInput.max = String(tiers.length - 1);
+    elements.animationTargetRateInput.step = "1";
+    elements.animationTargetRateInput.value = String(tierIndex);
+    elements.animationTargetRateInput.style.setProperty("--progress", `${(tierIndex / (tiers.length - 1)) * 100}%`);
+    elements.animationTargetRateValue.textContent = `${formatBlinkRate(settings.targetRate)} blinks/min · speed ${blinkSpeedForRate(settings.targetRate)}`;
   }
   setRangeControl(elements.animationHueInput, elements.animationHueValue, definition.hue, settings.hue);
   setRangeControl(elements.animationIdInput, elements.animationIdValue, definition.animationId, settings.animationId);
@@ -1446,7 +1457,8 @@ elements.animationSpeedInput.addEventListener("input", (event) => {
 });
 
 elements.animationTargetRateInput.addEventListener("input", (event) => {
-  currentAnimationSettings().targetRate = Number(event.target.value);
+  const tiers = currentAnimationDefinition().targetRate.tiers;
+  currentAnimationSettings().targetRate = tiers[Number(event.target.value)];
   updateAnimationBuilder();
 });
 
