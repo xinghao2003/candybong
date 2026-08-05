@@ -581,7 +581,9 @@ export class TrackStudio {
     if (!showUrl) return;
     try {
       this.setStatus("Loading published show…", "loading");
-      const response = await fetch(showUrl, { credentials: "same-origin" });
+      const resolvedShowUrl = new URL(showUrl, window.location.href);
+      if (resolvedShowUrl.origin !== window.location.origin) throw new Error("published show must use the same web origin");
+      const response = await fetch(resolvedShowUrl, { credentials: "same-origin" });
       if (!response.ok) throw new Error(`show request returned HTTP ${response.status}`);
       const show = normalizeShow(await response.json());
       this.applyShow(show, showUrl);

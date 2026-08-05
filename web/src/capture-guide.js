@@ -7,7 +7,7 @@
 // gets captured. A single Reset button restores the default size and center.
 // The getUserMedia open below intentionally mirrors camera-luma.js:141-150
 // so constraint changes stay applied in both places. Pure crop math is
-// exported from camera-luma.js so it can run under node --test.
+// exported from camera-luma.js so it can run in Vitest without a camera.
 
 import { captureSourceRect, cameraErrorMessage, cameraSupportMessage } from "./camera-luma.js";
 import { AlignmentGuide } from "./align-guide.js";

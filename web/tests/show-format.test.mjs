@@ -1,4 +1,4 @@
-import test from "node:test";
+import { test } from "vitest";
 import assert from "node:assert/strict";
 import { createShow, cueAtOrBefore, formatTimestamp, normalizeCue, normalizeShow, resolvePublishedAudioUrl } from "../src/show-format.js";
 

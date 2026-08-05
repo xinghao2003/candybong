@@ -3,11 +3,24 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --pretty false",
     "preview": "vite preview",
-    "test": "node --test tests/show-format.test.mjs tests/blink-lab.test.mjs tests/capture-guide.test.mjs tests/latency-calibration.test.mjs"
+    "test": "vitest run"
   },
   "devDependencies": {
-    "vite": "^8.1.4"
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@types/web-bluetooth": "^0.0.21",
+    "@vitejs/plugin-react": "^6.0.5",
+    "jsdom": "^29.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   }
 }

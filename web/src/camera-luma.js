@@ -1,6 +1,6 @@
 // Shared webcam engine for light-timing labs: extracts frame brightness from a
 // camera stream and detects on/off edges of a bright light (the Candybong).
-// Pure detection math is exported separately so it can run under node --test.
+// Pure detection math is exported separately so it can run in Vitest without a camera.
 
 export function cameraSupportMessage() {
   if (!globalThis.isSecureContext) return "Camera access needs HTTPS or localhost.";

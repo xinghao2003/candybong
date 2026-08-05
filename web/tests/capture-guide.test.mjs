@@ -1,4 +1,4 @@
-import test from "node:test";
+import { test } from "vitest";
 import assert from "node:assert/strict";
 import { captureSourceRect } from "../src/camera-luma.js";
 import { CAPTURE_SIZE } from "../src/capture-guide.js";
