@@ -1,6 +1,6 @@
 # Candybong Infinity web controller
 
-This is a dependency-free mobile prototype for the TWICE Candybong Infinity. The UI is device-agnostic, while `adapters.js` keeps each lightstick's Bluetooth names, GATT UUIDs, and packet encoders in a separate profile. New lightsticks can be added there without rewriting the controls.
+This is a Vite-powered mobile controller for the TWICE Candybong Infinity. The UI is device-agnostic, while `adapters.js` keeps each lightstick's Bluetooth names, GATT UUIDs, and packet encoders in a separate profile. New lightsticks can be added there without rewriting the controls.
 
 The current profile uses the same Nordic UART Service command characteristic as the Android proof of concept:
 
@@ -83,17 +83,23 @@ The sweep color is captured when the sweep starts and the inputs are locked whil
 
 Two camera realities shape the limits of this lab. First, browsers cannot lock camera auto-exposure, so the detector runs on the frame's brightest-percentile luma rather than the average — the lit LED sits near clipping, so exposure changes to the background barely move it (the signal meter still shows average brightness). Second, an edge needs the luma to stay across the threshold for about two camera frames (the debounce adapts to the measured frame rate, and 60 fps is requested when the camera offers it), so a blink's on-time must span roughly three frames to measure: about 50 ms at 60 fps, about 100 ms at 30 fps. Faster speeds show a "changing faster than the camera can see" hint instead of a measurement; slow speeds are covered by the per-row timeout, which extends automatically to fit the measured rate.
 
-Important: opening `http://192.168.x.x:4173/` from the phone is not a secure context, so Bluetooth will be unavailable. For USB-local debugging, enable Android USB debugging and run `adb reverse tcp:4173 tcp:4173`, then open `http://localhost:4173/` on the phone. Otherwise use an HTTPS tunnel or HTTPS hosting.
+Important: opening `http://192.168.x.x:5173/` from the phone is not a secure context, so Bluetooth will be unavailable. For USB-local development, enable Android USB debugging and run `adb reverse tcp:5173 tcp:5173`, then open `http://localhost:5173/` on the phone. Otherwise use an HTTPS tunnel or HTTPS hosting.
 
-For a quick local preview from the repository root:
+Install the web dependencies and start the Vite development server from `web`:
 
 ```powershell
-python serve.py
+npm install
+npm run dev
 ```
 
-The bundled server adds `Cache-Control: no-cache`, so browsers revalidate ES modules on every reload — plain `python -m http.server` can serve stale module files after edits (surfacing as "module does not provide an export named ..." errors).
+Vite serves the app at `http://localhost:5173/` and handles module reloading during development. To test the production bundle locally:
 
-Then open `http://127.0.0.1:4173/`.
+```powershell
+npm run build
+npm run preview
+```
+
+The preview server uses `http://localhost:4173/` by default.
 
 Run the show-format tests from `web` with:
 
