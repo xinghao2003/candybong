@@ -17,18 +17,6 @@ Open `index.html` in Chrome on Android over HTTPS or localhost. On iPhone/iPad, 
 
 The animated effects use the firmware's full extended opcodes. In particular, color fade commands are `ff e2 00 RR GG BB SS` (faster fade) and `ff e3 00 RR GG BB SS` (slower fade). Pink Glow, Ocean Pulse, and White Pulse all send an animated fade command rather than a static color command.
 
-## Music Reactive mode
-
-Music Reactive mode uses the browser microphone and Web Audio API; it does not require Spotify or upload audio anywhere. Connect the Candybong, choose an effect, tap **Start listening**, and allow microphone access. Play music through a nearby speaker while keeping the controller page in the foreground.
-
-- Volume pulse maps the live input level to brightness using the selected solid color.
-- Bass beat flash detects short low-frequency peaks and flashes the selected solid color.
-- Spectrum color maps low, mid, and high frequency energy to red, green, and blue.
-
-Sensitivity changes how strongly quiet audio reacts, while maximum brightness caps the light output. Reactive packets are rate-limited to eight writes per second, duplicate frames are skipped, and diagnostics sample at most one reactive packet per second so the log remains useful. A manual power, color, effect, or factory-palette command stops microphone mode before writing, preventing concurrent Bluetooth commands.
-
-Microphone limitations still apply: headphones and the phone's internal app audio cannot be captured directly, and browser echo cancellation may affect music played from the same phone. A separate speaker or music device works best. Microphone capture requires HTTPS or localhost just like Web Bluetooth, and support in iOS Web Bluetooth browsers such as Bluefy should be verified on the target device.
-
 The custom animation builder exposes all currently documented animation families with mode-specific limits:
 
 - RGB blink (`e1`), pulse (`e2`), and slow pulse (`e3`) accept any 24-bit RGB color. Each channel ranges from 0 to 255, for 16,777,216 theoretical combinations.
@@ -74,7 +62,7 @@ The Latency Lab panel (above Diagnostics) measures command-to-effect delay with 
 - **Perceived effect** flashes the light white after a short random delay (700–2000 ms so the tap cannot be anticipated) and measures how long until you tap the button. The result includes human reaction time (~150–250 ms), so subtract your personal reaction time when planning choreography. Results accumulate as last / best / average across taps.
 - **Camera flash** starts the webcam pointed at the lightstick (center it in the adjustable alignment circle — only the luma inside it is watched), flashes the light white, and times the write until the camera sees the visible change (and the restore edge back to the previous color). It covers the Bluetooth path plus the LED's own reaction and excludes human reaction time — but it includes camera capture and frame quantization (~33–100 ms), so treat it as an upper bound. The light is put on a steady color first so the flash is the only brightness change the camera sees.
 
-All tests pause track playback and music-reactive mode first, restore the previous light state afterwards, and log their TX packets (and any RX echoes) in the Diagnostics log. Disconnecting mid-test cancels and cleans up the pending probe.
+All tests pause track playback first, restore the previous light state afterwards, and log their TX packets (and any RX echoes) in the Diagnostics log. Disconnecting mid-test cancels and cleans up the pending probe.
 
 ## Blink Lab
 

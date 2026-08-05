@@ -1,5 +1,4 @@
 import { LIGHTSTICK_ADAPTERS, adapterForDevice, bluetoothRequestOptions, blinkSpeedForRate } from "./adapters.js";
-import { MicrophoneReactiveController, microphoneErrorMessage, microphoneSupportMessage } from "./music-reactive.js";
 import { cueModeLabel } from "./show-format.js";
 import { TrackStudio } from "./track-studio.js";
 import { CaptureGuide } from "./capture-guide.js";
@@ -34,13 +33,6 @@ const LATENCY_FLASH_MAX_DELAY_MS = 2000;
 const LATENCY_TAP_TIMEOUT_MS = 10000;
 const LATENCY_CAMERA_TIMEOUT_MS = 4000;
 const FF15_REPLY_PREFIX = [0xff, 0x15, 0x03];
-const MUSIC_WRITE_INTERVAL_MS = 125;
-const MUSIC_DIAGNOSTIC_INTERVAL_MS = 1000;
-const MUSIC_MODE_LABELS = {
-  pulse: "Volume pulse",
-  beat: "Bass beat flash",
-  spectrum: "Spectrum color",
-};
 const animationSettings = Object.fromEntries(
   Object.entries(defaultAdapter.customAnimations).map(([mode, definition]) => [
     mode,
@@ -100,23 +92,6 @@ const state = {
   },
   poweredOff: false,
   sending: false,
-  music: {
-    active: false,
-    starting: false,
-    mode: "pulse",
-    sensitivity: 5,
-    maximumBrightness: 10,
-    color: "#ff5fa2",
-    brightness: 1,
-    level: 0,
-    bass: 0,
-    errorMessage: "",
-    stopMessage: "",
-    lastPacketKey: "",
-    lastWriteAt: 0,
-    lastDiagnosticAt: 0,
-    writePromise: null,
-  },
 };
 
 let trackStudio = null;
@@ -203,37 +178,8 @@ const elements = {
   diagnosticEmpty: document.querySelector("#diagnosticEmpty"),
   clearDiagnosticsButton: document.querySelector("#clearDiagnosticsButton"),
   sceneButtons: [...document.querySelectorAll("[data-scene]")],
-  musicMode: document.querySelector("#musicMode"),
-  musicSensitivityInput: document.querySelector("#musicSensitivityInput"),
-  musicSensitivityValue: document.querySelector("#musicSensitivityValue"),
-  musicBrightnessInput: document.querySelector("#musicBrightnessInput"),
-  musicBrightnessValue: document.querySelector("#musicBrightnessValue"),
-  startMusicButton: document.querySelector("#startMusicButton"),
-  stopMusicButton: document.querySelector("#stopMusicButton"),
-  musicNote: document.querySelector("#musicNote"),
-  musicStatus: document.querySelector("#musicStatus"),
-  musicStatusDetail: document.querySelector("#musicStatusDetail"),
-  musicStatusDot: document.querySelector("#musicStatusDot"),
-  musicLevelMeter: document.querySelector("#musicLevelMeter"),
-  musicLevelFill: document.querySelector("#musicLevelFill"),
-  musicLevelValue: document.querySelector("#musicLevelValue"),
-  musicBassMeter: document.querySelector("#musicBassMeter"),
-  musicBassFill: document.querySelector("#musicBassFill"),
-  musicBassValue: document.querySelector("#musicBassValue"),
-  musicBeatIndicator: document.querySelector("#musicBeatIndicator"),
   toast: document.querySelector("#toast"),
 };
-
-const microphoneController = new MicrophoneReactiveController({
-  getSettings: () => ({
-    color: state.color,
-    maximumBrightness: state.music.maximumBrightness,
-    mode: state.music.mode,
-    sensitivity: state.music.sensitivity,
-  }),
-  onFrame: handleMusicFrame,
-  onEnded: handleMicrophoneEnded,
-});
 
 function isConnected() {
   return Boolean(state.characteristic && state.device?.gatt?.connected);
@@ -246,7 +192,6 @@ function setControlsDisabled(disabled) {
   elements.applyAnimationButton.disabled = disabled;
   elements.testFactoryColorButton.disabled = disabled;
   elements.sceneButtons.forEach((button) => { button.disabled = disabled; });
-  updateMusicControls(disabled);
   updateLatencyControls();
 }
 
@@ -274,63 +219,6 @@ function setCommandStatus(status, message) {
   elements.commandStatus.classList.remove("success", "sending", "error");
   if (status) elements.commandStatus.classList.add(status);
   elements.lastCommand.textContent = message;
-}
-
-function setMusicMeter(meter, fill, output, value) {
-  const percent = Math.round(Math.min(1, Math.max(0, value)) * 100);
-  meter.setAttribute("aria-valuenow", String(percent));
-  fill.style.width = `${percent}%`;
-  output.textContent = `${percent}%`;
-}
-
-function updateMusicRanges() {
-  const sensitivityProgress = ((state.music.sensitivity - 1) / 9) * 100;
-  const brightnessProgress = ((state.music.maximumBrightness - 1) / 9) * 100;
-  elements.musicSensitivityInput.style.setProperty("--progress", `${sensitivityProgress}%`);
-  elements.musicBrightnessInput.style.setProperty("--progress", `${brightnessProgress}%`);
-  elements.musicSensitivityValue.textContent = `${state.music.sensitivity} / 10`;
-  elements.musicBrightnessValue.textContent = `${state.music.maximumBrightness} / 10`;
-}
-
-function updateMusicControls(controlsDisabled = !isConnected() || state.sending) {
-  const supportError = microphoneSupportMessage();
-  const music = state.music;
-
-  elements.startMusicButton.disabled = controlsDisabled || music.active || music.starting || Boolean(supportError);
-  elements.stopMusicButton.disabled = !music.active && !music.starting;
-  elements.musicMode.disabled = music.starting;
-  elements.musicSensitivityInput.disabled = music.starting;
-  elements.musicBrightnessInput.disabled = music.starting;
-  elements.musicStatusDot.classList.remove("starting", "listening", "error");
-
-  if (music.starting) {
-    elements.musicStatus.textContent = "Requesting microphone";
-    elements.musicStatusDetail.textContent = "Use the browser prompt to allow access";
-    elements.musicStatusDot.classList.add("starting");
-  } else if (music.active) {
-    elements.musicStatus.textContent = "Listening locally";
-    elements.musicStatusDetail.textContent = `${MUSIC_MODE_LABELS[music.mode]} · up to 8 updates/sec`;
-    elements.musicStatusDot.classList.add("listening");
-  } else if (!isConnected()) {
-    elements.musicStatus.textContent = "Connect your Candybong";
-    elements.musicStatusDetail.textContent = "Microphone is idle";
-  } else if (music.errorMessage) {
-    elements.musicStatus.textContent = "Microphone unavailable";
-    elements.musicStatusDetail.textContent = music.errorMessage;
-    elements.musicStatusDot.classList.add("error");
-  } else if (supportError) {
-    elements.musicStatus.textContent = "Microphone unavailable";
-    elements.musicStatusDetail.textContent = supportError;
-    elements.musicStatusDot.classList.add("error");
-  } else {
-    elements.musicStatus.textContent = "Ready to listen";
-    elements.musicStatusDetail.textContent = music.stopMessage || "Microphone is idle";
-  }
-
-  elements.musicNote.textContent = music.mode === "spectrum"
-    ? "Spectrum color maps bass, mids, and treble to RGB. Keep this page in the foreground while listening."
-    : "Volume pulse and bass beat use your selected solid color. Keep this page in the foreground while listening.";
-  updateMusicRanges();
 }
 
 function packetLabel(packet) {
@@ -442,11 +330,7 @@ function cancelLatencyTests() {
 async function latencyPreamble() {
   trackStudio?.pauseForManualControl();
   state.timelineCue = null;
-  if (state.music.writePromise) {
-    try { await state.music.writePromise; } catch (error) { /* The reactive writer reports its own error. */ }
-  }
   try { await timelineWriteChain; } catch (error) { /* Timeline write errors are reported where they occur. */ }
-  if (state.music.active || state.music.starting) stopMusicReactive("Stopped by latency test");
 }
 
 async function prepareLatencyDarkBaseline() {
@@ -482,7 +366,7 @@ async function probeOnce(packet, label, { expectedResponse = null } = {}) {
   const writeStart = performance.now();
   let writeMs = null;
   try {
-    await writeCharacteristic(packet, false);
+    await writeCharacteristic(packet);
     writeMs = performance.now() - writeStart;
   } catch (error) {
     console.error(error);
@@ -607,7 +491,7 @@ async function writeCalibrationCommand(packet, expectedPrefix = null) {
   const writeStart = performance.now();
   addDiagnostic("TX", `Calibration · ${packetLabel(packet)}`, packet, "tx");
   try {
-    await writeCharacteristic(packet, false);
+    await writeCharacteristic(packet);
   } catch (error) {
     if (response) {
       if (state.latency.pendingRtt === response) state.latency.pendingRtt = null;
@@ -774,7 +658,7 @@ function restoreLatencyFlash() {
     ? state.adapter.commands.powerOff()
     : state.adapter.commands.staticColor(state.latency.restoreColor, state.latency.restoreBrightness);
   addDiagnostic("TX", state.latency.wasPoweredOff ? "Latency restore · power off" : "Latency restore · color", packet, "tx");
-  writeCharacteristic(packet, false).catch((error) => console.error(error));
+  writeCharacteristic(packet).catch((error) => console.error(error));
 }
 
 async function startLatencyTapTest() {
@@ -803,7 +687,7 @@ async function startLatencyTapTest() {
   state.latency.flashStartedAt = performance.now();
   const flashPacket = state.adapter.commands.factoryColor(0x00);
   addDiagnostic("TX", "Latency flash · white (FF 15)", flashPacket, "tx");
-  writeCharacteristic(flashPacket, false).catch((error) => {
+  writeCharacteristic(flashPacket).catch((error) => {
     console.error(error);
     setLatencyStatus("Flash failed", "warning");
     cancelLatencyTests();
@@ -864,7 +748,7 @@ function sendLatencyFlashRestore() {
     : state.adapter.commands.staticColor(state.latency.restoreColor, state.latency.restoreBrightness);
   state.latency.restoreWriteAt = performance.now();
   addDiagnostic("TX", state.latency.wasPoweredOff ? "Latency flash restore · power off" : "Latency flash restore · color", packet, "tx");
-  writeCharacteristic(packet, false).catch((error) => console.error(error));
+  writeCharacteristic(packet).catch((error) => console.error(error));
   state.latency.pendingRestore = true;
   state.latency.pendingRestoreTimer = window.setTimeout(() => {
     state.latency.pendingRestore = null;
@@ -930,7 +814,7 @@ async function runCameraFlashTest() {
   const flashPacket = state.adapter.commands.factoryColor(0x00);
   addDiagnostic("TX", "Latency flash · white (FF 15 camera)", flashPacket, "tx");
   state.latency.pendingRise = true;
-  writeCharacteristic(flashPacket, false).catch((error) => {
+  writeCharacteristic(flashPacket).catch((error) => {
     console.error(error);
     cancelCameraFlashTest();
   });
@@ -1170,15 +1054,13 @@ function selectFactoryIndex(index) {
   updateFactorySelection();
 }
 
-async function writeCharacteristic(packet, preferWithoutResponse = false) {
+async function writeCharacteristic(packet) {
   const characteristic = state.characteristic;
   if (!characteristic || !isConnected()) throw new Error("The Candybong is not connected");
 
   const canWriteWithResponse = characteristic.properties?.write;
   const canWriteWithoutResponse = characteristic.properties?.writeWithoutResponse;
-  if (preferWithoutResponse && canWriteWithoutResponse && typeof characteristic.writeValueWithoutResponse === "function") {
-    await characteristic.writeValueWithoutResponse(packet);
-  } else if (canWriteWithResponse && typeof characteristic.writeValueWithResponse === "function") {
+  if (canWriteWithResponse && typeof characteristic.writeValueWithResponse === "function") {
     await characteristic.writeValueWithResponse(packet);
   } else if (canWriteWithoutResponse && typeof characteristic.writeValueWithoutResponse === "function") {
     await characteristic.writeValueWithoutResponse(packet);
@@ -1189,166 +1071,9 @@ async function writeCharacteristic(packet, preferWithoutResponse = false) {
   }
 }
 
-function resetMusicMeters() {
-  setMusicMeter(elements.musicLevelMeter, elements.musicLevelFill, elements.musicLevelValue, 0);
-  setMusicMeter(elements.musicBassMeter, elements.musicBassFill, elements.musicBassValue, 0);
-  elements.musicBeatIndicator.classList.remove("detected");
-  elements.musicBeatIndicator.querySelector("small").textContent = "Waiting for audio";
-}
-
-function stopMusicReactive(message = "Music mode stopped", { error = false } = {}) {
-  const wasRunning = state.music.active || state.music.starting || microphoneController.active;
-  microphoneController.stop();
-  state.music.active = false;
-  state.music.starting = false;
-  state.music.level = 0;
-  state.music.bass = 0;
-  state.music.lastPacketKey = "";
-  state.music.lastWriteAt = 0;
-  if (wasRunning || error) {
-    state.music.errorMessage = error ? message : "";
-    state.music.stopMessage = error ? "" : message;
-  }
-  resetMusicMeters();
-  updateMusicControls();
-  updatePreview();
-  if (wasRunning) addDiagnostic(error ? "ERR" : "SYS", message, null, error ? "error" : "status");
-}
-
-function handleMicrophoneEnded() {
-  const message = "Microphone input ended. Start listening again to resume.";
-  stopMusicReactive(message, { error: true });
-  setCommandStatus("error", "Music reactive mode stopped because microphone input ended.");
-  showToast("Microphone input ended");
-}
-
-async function writeMusicFrame(frame) {
-  if (!state.music.active || !state.adapter || !isConnected() || state.sending || state.music.writePromise) return;
-  if (frame.timestamp - state.music.lastWriteAt < MUSIC_WRITE_INTERVAL_MS) return;
-
-  const packet = state.adapter.commands.staticColor(frame.color, frame.brightness);
-  const packetKey = packetLabel(packet);
-  if (packetKey === state.music.lastPacketKey) return;
-
-  state.music.lastWriteAt = frame.timestamp;
-  const writePromise = writeCharacteristic(packet, true);
-  state.music.writePromise = writePromise;
-
-  try {
-    await writePromise;
-    if (!state.music.active) return;
-    state.music.lastPacketKey = packetKey;
-    state.music.color = frame.color;
-    state.music.brightness = frame.brightness;
-    state.poweredOff = false;
-    setCommandStatus("success", `Music reactive · ${MUSIC_MODE_LABELS[state.music.mode]} · brightness ${frame.brightness}`);
-    updatePreview();
-
-    if (frame.timestamp - state.music.lastDiagnosticAt >= MUSIC_DIAGNOSTIC_INTERVAL_MS) {
-      state.music.lastDiagnosticAt = frame.timestamp;
-      addDiagnostic("TX", "Music frame (sampled)", packet, "tx");
-    }
-  } catch (error) {
-    if (state.music.active) {
-      const message = error.message || "Bluetooth write error";
-      setCommandStatus("error", "Music reactive Bluetooth write failed.");
-      stopMusicReactive(`Music reactive write failed: ${message}`, { error: true });
-      showToast("Music mode stopped after a Bluetooth error");
-    }
-  } finally {
-    if (state.music.writePromise === writePromise) state.music.writePromise = null;
-  }
-}
-
-function handleMusicFrame(frame) {
-  if (!state.music.active) return;
-  state.music.level = frame.level;
-  state.music.bass = frame.bass;
-  setMusicMeter(elements.musicLevelMeter, elements.musicLevelFill, elements.musicLevelValue, frame.level);
-  setMusicMeter(elements.musicBassMeter, elements.musicBassFill, elements.musicBassValue, frame.bass);
-  elements.musicBeatIndicator.classList.toggle("detected", frame.beatStrength > 0.35);
-  elements.musicBeatIndicator.querySelector("small").textContent = frame.beatStrength > 0.35 ? "Beat detected" : "Listening for bass peaks";
-  void writeMusicFrame(frame);
-}
-
-async function startMusicReactive() {
-  if (!isConnected()) {
-    showToast("Connect your Candybong first");
-    return;
-  }
-  const supportError = microphoneSupportMessage();
-  if (supportError) {
-    state.music.errorMessage = supportError;
-    updateMusicControls();
-    showToast(supportError);
-    return;
-  }
-
-  state.music.errorMessage = "";
-  state.music.stopMessage = "";
-  state.music.starting = true;
-  state.music.lastPacketKey = "";
-  state.music.lastWriteAt = 0;
-  state.music.lastDiagnosticAt = 0;
-  updateMusicControls();
-  setCommandStatus("sending", "Waiting for microphone permission…");
-
-  try {
-    await microphoneController.start();
-    if (!isConnected()) {
-      stopMusicReactive("Candybong disconnected while the microphone was starting");
-      return;
-    }
-
-    state.music.starting = false;
-    state.music.active = true;
-    state.music.color = state.color;
-    state.music.brightness = 1;
-    state.activeScene = null;
-    state.activeCustomAnimation = null;
-    state.activeFactoryIndex = null;
-    state.poweredOff = false;
-    updateMusicControls();
-    updatePreview();
-    setCommandStatus("success", `Music reactive mode ready · ${MUSIC_MODE_LABELS[state.music.mode]}`);
-    addDiagnostic("SYS", "Music reactive microphone started", null, "status");
-    showToast("Music reactive mode started");
-  } catch (error) {
-    microphoneController.stop();
-    state.music.starting = false;
-    state.music.active = false;
-    if (!isConnected() && error.name === "AbortError") {
-      state.music.errorMessage = "";
-      updateMusicControls();
-      return;
-    }
-    const message = microphoneErrorMessage(error);
-    state.music.errorMessage = message;
-    updateMusicControls();
-    setCommandStatus("error", message);
-    addDiagnostic("ERR", `Microphone start failed: ${message}`, null, "error");
-    showToast(message);
-  }
-}
-
-async function stopMusicAndRestore() {
-  const wasRunning = state.music.active || state.music.starting;
-  stopMusicReactive("Stopped by user");
-  if (!wasRunning || !isConnected()) return;
-
-  if (await sendPacket(state.adapter.commands.staticColor(state.color, state.brightness), "Restored solid color")) {
-    state.poweredOff = state.brightness === 0;
-    updatePreview();
-  }
-}
-
 async function sendPacket(packet, label) {
   trackStudio?.pauseForManualControl();
   state.timelineCue = null;
-  if (state.music.active || state.music.starting) stopMusicReactive("Stopped by manual control");
-  if (state.music.writePromise) {
-    try { await state.music.writePromise; } catch (error) { /* The reactive writer reports its own error. */ }
-  }
   try { await timelineWriteChain; } catch (error) { /* Timeline write errors are reported where they occur. */ }
 
   if (!state.adapter || !state.characteristic) {
@@ -1477,7 +1202,6 @@ async function connect() {
 }
 
 function handleDisconnect() {
-  stopMusicReactive("Lightstick disconnected");
   clearResponseCharacteristic();
   cancelLatencyTests();
   state.adapter = null;
@@ -1490,7 +1214,6 @@ function handleDisconnect() {
 }
 
 function disconnect() {
-  stopMusicReactive("Bluetooth disconnected by user");
   if (state.device?.gatt?.connected) {
     state.device.gatt.disconnect();
   } else {
@@ -1512,29 +1235,22 @@ function selectSolidColor(color) {
 
 function updatePreview() {
   const selectedColor = state.color.toUpperCase();
-  const musicActive = state.music.active;
   const scene = state.activeScene ? activeAdapter().scenes[state.activeScene] : null;
   const effect = state.activeCustomAnimation || scene;
   const factoryActive = state.activeFactoryIndex !== null;
-  const color = musicActive
-    ? state.music.color.toUpperCase()
-    : factoryActive ? "#D9CFD5" : (effect?.color || selectedColor).toUpperCase();
-  const brightness = (musicActive ? state.music.brightness : state.brightness) / 10;
+  const color = factoryActive ? "#D9CFD5" : (effect?.color || selectedColor).toUpperCase();
+  const brightness = state.brightness / 10;
 
   elements.lightstickVisual.style.setProperty("--light-color", color);
-  elements.lightstickVisual.style.setProperty("--light-alpha", String(musicActive ? Math.max(0.08, brightness) : effect || factoryActive ? 1 : Math.max(0.08, brightness)));
-  elements.lightstickVisual.dataset.effect = musicActive || factoryActive ? "solid" : effect?.previewEffect || "solid";
-  elements.lightstickVisual.classList.toggle("is-off", !musicActive && (state.poweredOff || (!effect && !factoryActive && state.brightness === 0)));
+  elements.lightstickVisual.style.setProperty("--light-alpha", String(effect || factoryActive ? 1 : Math.max(0.08, brightness)));
+  elements.lightstickVisual.dataset.effect = factoryActive ? "solid" : effect?.previewEffect || "solid";
+  elements.lightstickVisual.classList.toggle("is-off", state.poweredOff || (!effect && !factoryActive && state.brightness === 0));
   elements.colorSwatch.style.background = selectedColor;
-  elements.hexValue.textContent = musicActive ? color : factoryActive ? `INDEX ${factoryIndexHex(state.activeFactoryIndex)}` : color;
+  elements.hexValue.textContent = factoryActive ? `INDEX ${factoryIndexHex(state.activeFactoryIndex)}` : color;
   elements.brightnessValue.textContent = `${state.brightness} / 10`;
   elements.brightnessInput.style.setProperty("--progress", `${state.brightness * 10}%`);
 
-  if (musicActive) {
-    elements.previewMode.textContent = "Music";
-    elements.previewName.textContent = MUSIC_MODE_LABELS[state.music.mode];
-    elements.previewDescription.textContent = `Microphone reactive · brightness ${state.music.brightness}`;
-  } else if (state.timelineCue) {
+  if (state.timelineCue) {
     elements.previewMode.textContent = "Track";
     elements.previewName.textContent = state.timelineCue.label || cueModeLabel(state.timelineCue.mode);
     elements.previewDescription.textContent = `Timeline cue at ${state.timelineCue.time.toFixed(2)} seconds`;
@@ -1558,10 +1274,10 @@ function updatePreview() {
   }
 
   elements.colorPresets.forEach((button) => {
-    button.classList.toggle("active", !musicActive && !effect && !factoryActive && button.dataset.color.toUpperCase() === selectedColor);
+    button.classList.toggle("active", !effect && !factoryActive && button.dataset.color.toUpperCase() === selectedColor);
   });
   elements.sceneButtons.forEach((button) => {
-    button.classList.toggle("active", !musicActive && button.dataset.scene === state.activeScene);
+    button.classList.toggle("active", button.dataset.scene === state.activeScene);
   });
   updateAnimationBuilder();
 }
@@ -1623,27 +1339,6 @@ elements.connectButton.addEventListener("click", () => {
   if (isConnected()) disconnect();
   else connect();
 });
-
-elements.musicMode.addEventListener("change", (event) => {
-  state.music.mode = event.target.value;
-  state.music.lastPacketKey = "";
-  updateMusicControls();
-  if (state.music.active) updatePreview();
-});
-
-elements.musicSensitivityInput.addEventListener("input", (event) => {
-  state.music.sensitivity = Number(event.target.value);
-  updateMusicRanges();
-});
-
-elements.musicBrightnessInput.addEventListener("input", (event) => {
-  state.music.maximumBrightness = Number(event.target.value);
-  state.music.lastPacketKey = "";
-  updateMusicRanges();
-});
-
-elements.startMusicButton.addEventListener("click", startMusicReactive);
-elements.stopMusicButton.addEventListener("click", stopMusicAndRestore);
 
 elements.onButton.addEventListener("click", async () => {
   if (await sendPacket(state.adapter.commands.powerOn(), "Power on")) {
@@ -1919,7 +1614,6 @@ trackStudio = new TrackStudio({
   onCue: applyTrackCue,
   onPlaybackChange: (playing) => {
     if (!playing) return;
-    if (state.music.active || state.music.starting) stopMusicReactive("Stopped by track playback");
     setCommandStatus(null, isConnected()
       ? "Track playback is controlling the connected lightstick"
       : "Track playback is running as a visual preview");
