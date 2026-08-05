@@ -4,7 +4,38 @@ import { useBluetoothSession } from "./bluetooth-session";
 import type { AnimationParameters, ControllerState, LightstickAdapter } from "./domain";
 import { packetLabel } from "./domain";
 
-const PRESET_COLORS = ["#ff5fa2", "#ff4068", "#38c8ff", "#8b6cff", "#5de2a5", "#ffffff"];
+type CommandMode =
+  | "blink"
+  | "fadeFast"
+  | "fadeSlow"
+  | "randomBlink"
+  | "solid"
+  | "twiceColor"
+  | "builtIn"
+  | "palette"
+  | "fixedPattern";
+
+type CommandParameters = AnimationParameters & { brightness: number };
+
+const COMMAND_OPTIONS: Array<{ id: CommandMode; label: string; description: string; animationKey?: string }> = [
+  { id: "blink", label: "Blink", description: "Blink one RGB color at a target rate", animationKey: "blink" },
+  { id: "fadeFast", label: "Fade fast", description: "Fade between black and one RGB color", animationKey: "pulse" },
+  { id: "fadeSlow", label: "Fade slow", description: "Fade between approximately 20% and full color", animationKey: "slowPulse" },
+  { id: "randomBlink", label: "Random blink", description: "Cycle through the firmware random-color table", animationKey: "randomBlink" },
+  { id: "solid", label: "Solid color", description: "Set a direct RGB color and brightness" },
+  { id: "twiceColor", label: "TWICE color", description: "Adjust the shared scaling used by the TWICE preset", animationKey: "twiceShift" },
+  { id: "builtIn", label: "Built-in animation", description: "Select one of the nine firmware patterns", animationKey: "builtIn" },
+  { id: "palette", label: "Solid-color palette", description: "Select one of 28 device-defined solid colors" },
+  { id: "fixedPattern", label: "Fixed-pattern rotation", description: "Rotate the built-in orange/red-orange pattern", animationKey: "hueSpin" },
+];
+
+const ANIMATION_KEY_BY_COMMAND: Partial<Record<CommandMode, string>> = Object.fromEntries(
+  COMMAND_OPTIONS.filter((option) => option.animationKey).map((option) => [option.id, option.animationKey]),
+);
+
+function optionFor(mode: CommandMode) {
+  return COMMAND_OPTIONS.find((option) => option.id === mode) || COMMAND_OPTIONS[0];
+}
 
 export function Controller({ state, setState, onBeforeCommand, notify }: {
   state: ControllerState;
@@ -14,20 +45,34 @@ export function Controller({ state, setState, onBeforeCommand, notify }: {
 }) {
   const { snapshot, sendCommand } = useBluetoothSession();
   const adapter = (snapshot.adapter || LIGHTSTICK_ADAPTERS[0]) as LightstickAdapter;
-  const animationNames = Object.keys(adapter.customAnimations);
-  const [animationMode, setAnimationMode] = useState(animationNames.includes("pulse") ? "pulse" : animationNames[0]);
-  const definition = adapter.customAnimations[animationMode];
-  const [parameters, setParameters] = useState<AnimationParameters>({
-    color: "#ff5fa2", speed: 14, hue: 16, animationId: 1, colorShift: 16,
+  const [commandMode, setCommandMode] = useState<CommandMode>("solid");
+  const [parameters, setParameters] = useState<CommandParameters>({
+    color: state.color,
+    brightness: state.brightness,
+    speed: 14,
+    hue: 10,
+    animationId: 1,
+    colorShift: 10,
   });
+  const [paletteIndex, setPaletteIndex] = useState(0);
   const [targetRate, setTargetRate] = useState(60);
+  const selectedOption = optionFor(commandMode);
+  const animationKey = ANIMATION_KEY_BY_COMMAND[commandMode];
+  const definition = animationKey ? adapter.customAnimations[animationKey] : null;
   const effectiveParameters = useMemo(() => ({
     ...parameters,
-    speed: animationMode === "blink" ? (blinkSpeedForRate(targetRate) ?? parameters.speed) : parameters.speed,
-  }), [animationMode, parameters, targetRate]);
-  const animationPacket = useMemo(() => {
-    try { return definition.packet(effectiveParameters); } catch { return new Uint8Array(); }
-  }, [definition, effectiveParameters]);
+    speed: commandMode === "blink" ? (blinkSpeedForRate(targetRate) ?? parameters.speed) : parameters.speed,
+  }), [commandMode, parameters, targetRate]);
+  const commandPacket = useMemo(() => {
+    try {
+      if (commandMode === "solid") return adapter.commands.staticColor(parameters.color, parameters.brightness);
+      if (commandMode === "palette") return adapter.commands.factoryColor(paletteIndex);
+      if (!definition) return new Uint8Array();
+      return definition.packet(effectiveParameters);
+    } catch {
+      return new Uint8Array();
+    }
+  }, [adapter, commandMode, definition, effectiveParameters, paletteIndex, parameters.brightness, parameters.color]);
 
   async function run(packet: Uint8Array, label: string, update: Partial<ControllerState>) {
     onBeforeCommand();
@@ -42,89 +87,76 @@ export function Controller({ state, setState, onBeforeCommand, notify }: {
     }
   }
 
-  function chooseColor(color: string) {
-    const normalized = color.toLowerCase();
-    setState((current) => ({
+  function selectCommand(mode: CommandMode) {
+    setCommandMode(mode);
+    const key = ANIMATION_KEY_BY_COMMAND[mode];
+    const next = key ? adapter.customAnimations[key] : null;
+    setParameters((current) => ({
       ...current,
-      color: normalized,
-      poweredOff: current.brightness === 0,
-      activeScene: null,
-      activeAnimation: null,
-      previewColor: normalized,
-      previewEffect: "solid",
-      previewName: normalized === "#ff5fa2" ? "Candy pink" : "Custom color",
-      previewDescription: `Solid color · brightness ${current.brightness}`,
+      speed: mode === "fixedPattern"
+        ? (next?.speed?.defaultValue ?? 1)
+        : (next?.speed?.defaultValue ?? current.speed),
+      hue: mode === "fixedPattern"
+        ? 10
+        : (next?.hue?.defaultValue ?? current.hue),
+      animationId: next?.animationId?.defaultValue ?? current.animationId,
+      colorShift: mode === "twiceColor"
+        ? Math.min(10, next?.colorShift?.defaultValue ?? 10)
+        : (next?.colorShift?.defaultValue ?? current.colorShift),
     }));
   }
 
-  const previewColor = state.previewColor;
+  function updateCommandState(): Partial<ControllerState> {
+    const colorCommand = commandMode === "blink" || commandMode === "fadeFast" || commandMode === "fadeSlow" || commandMode === "solid";
+    const isOffPattern = commandMode === "builtIn" && (parameters.animationId === 3 || parameters.animationId === 7);
+    return {
+      color: colorCommand ? parameters.color : state.color,
+      brightness: commandMode === "solid" ? parameters.brightness : state.brightness,
+      poweredOff: isOffPattern,
+      activeScene: null,
+      activeAnimation: commandMode === "solid" || commandMode === "palette" ? null : commandMode,
+    };
+  }
 
   return (
     <div className="page controller-page">
       <div className="page-heading">
-        <div><p className="eyebrow">LIGHT CONTROL</p><h1>Make it yours.</h1><p>Choose a color, adjust brightness, or explore the Candybong&apos;s built-in animations.</p></div>
-      </div>
-
-      <div className="controller-hero-grid">
-        <article className="card preview-card">
-          <div className="card-heading"><div><span className="section-label">LIVE PREVIEW</span><h2>{state.previewName}</h2></div><span className="mode-pill">{state.activeAnimation || state.activeScene ? "Effect" : state.poweredOff ? "Off" : "Solid"}</span></div>
-          <div className={`light-preview ${state.poweredOff ? "off" : ""}`} data-effect={state.previewEffect} style={{ "--light-color": previewColor, "--light-alpha": String(Math.max(0.08, state.brightness / 10)) } as React.CSSProperties}>
-            <div className="preview-glow" /><div className="preview-disc"><span>TWICE</span></div>
-          </div>
-          <div className="preview-meta"><div><strong>{state.previewName}</strong><span>{state.previewDescription}</span></div><code>{previewColor.toUpperCase()}</code></div>
-          <div className={`command-line ${snapshot.sending ? "sending" : ""}`}><i />{state.lastCommand}</div>
-        </article>
-
-        <div className="controller-stack">
-          <article className="card">
-            <div className="card-heading"><div><span className="section-label">POWER</span><h2>Lightstick power</h2></div></div>
-            <div className="button-grid">
-              <button className="dark-button" type="button" disabled={snapshot.sending} onClick={() => void run(adapter.commands.powerOn(), "Power on", { poweredOff: false, previewDescription: "Lightstick powered on" })}>Turn on</button>
-              <button className="secondary-button" type="button" disabled={snapshot.sending} onClick={() => void run(adapter.commands.powerOff(), "Power off", { poweredOff: true, activeScene: null, activeAnimation: null, previewEffect: "solid", previewName: "Lightstick off", previewDescription: "Turn it on to continue" })}>Turn off</button>
-            </div>
-          </article>
-
-          <article className="card">
-            <div className="card-heading"><div><span className="section-label">SOLID COLOR</span><h2>Color and brightness</h2></div><label className="color-input"><input type="color" value={state.color} onChange={(event) => chooseColor(event.target.value)} /><span style={{ background: state.color }} /></label></div>
-            <div className="color-presets" aria-label="Quick colors">
-              {PRESET_COLORS.map((color) => <button key={color} type="button" className={state.color === color ? "active" : ""} style={{ "--preset": color } as React.CSSProperties} onClick={() => chooseColor(color)} aria-label={`Select ${color}`} />)}
-            </div>
-            <RangeField label="Brightness" value={state.brightness} minimum={0} maximum={10} output={`${state.brightness} / 10`} onChange={(brightness) => setState((current) => ({ ...current, brightness, poweredOff: brightness === 0, activeScene: null, activeAnimation: null, previewColor: current.color, previewEffect: "solid", previewName: current.color === "#ff5fa2" ? "Candy pink" : "Custom color", previewDescription: `Solid color · brightness ${brightness}` }))} />
-            <button className="primary-button wide" type="button" disabled={snapshot.sending} onClick={() => void run(adapter.commands.staticColor(state.color, state.brightness), "Solid color", { poweredOff: state.brightness === 0, activeScene: null, activeAnimation: null, previewColor: state.color, previewEffect: "solid", previewName: state.color === "#ff5fa2" ? "Candy pink" : "Custom color", previewDescription: `Solid color · brightness ${state.brightness}` })}>Apply solid color</button>
-          </article>
-        </div>
+        <div><p className="eyebrow">LIGHT CONTROL</p><h1>Make it yours.</h1><p>Send documented safe lighting commands and adjust only the controls each command needs.</p></div>
       </div>
 
       <article className="card section-card">
-        <div className="card-heading"><div><span className="section-label">QUICK EFFECTS</span><h2>Tap to animate</h2></div><span className="helper">Applied immediately</span></div>
-        <div className="effect-grid">
-          {Object.entries(adapter.scenes).map(([id, scene]) => (
-            <button className={`effect-card ${state.activeScene === id ? "active" : ""}`} key={id} type="button" disabled={snapshot.sending} onClick={() => void run(scene.packet(), scene.name, { poweredOff: false, activeScene: id, activeAnimation: null, color: scene.color, previewColor: scene.color, previewEffect: scene.previewEffect, previewName: scene.name, previewDescription: scene.description })}>
-              <span className="effect-dot" style={{ "--effect-color": scene.color } as React.CSSProperties} /><span><strong>{scene.name}</strong><small>{scene.description}</small></span><b>✓</b>
-            </button>
-          ))}
+        <div className="card-heading"><div><span className="section-label">SAFE LIGHTING COMMANDS</span><h2>Choose a command</h2></div><span className="helper">Protocol allow-list</span></div>
+        <div className="builder-grid">
+          <div className="builder-controls">
+            <label className="field"><span>Command</span><select aria-label="Command" value={commandMode} onChange={(event) => selectCommand(event.target.value as CommandMode)}>{COMMAND_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
+
+            {(commandMode === "blink" || commandMode === "fadeFast" || commandMode === "fadeSlow" || commandMode === "solid") && <label className="field"><span>Color</span><input className="large-color" type="color" value={parameters.color} onChange={(event) => setParameters((current) => ({ ...current, color: event.target.value }))} /></label>}
+
+            {(commandMode === "fadeFast" || commandMode === "fadeSlow" || commandMode === "randomBlink") && definition?.speed && <RangeField label="Firmware speed" value={parameters.speed} minimum={definition.speed.minimum} maximum={definition.speed.maximum} output={`${parameters.speed} / ${definition.speed.maximum}`} onChange={(speed) => setParameters((current) => ({ ...current, speed }))} />}
+            {commandMode === "blink" && <RangeField label="Target blink rate" value={targetRate} minimum={10} maximum={600} output={`${targetRate} blinks/min · speed ${effectiveParameters.speed}`} onChange={setTargetRate} />}
+            {commandMode === "solid" && <RangeField label="Brightness" value={parameters.brightness} minimum={0} maximum={10} output={`${parameters.brightness} / 10`} onChange={(brightness) => setParameters((current) => ({ ...current, brightness }))} />}
+            {commandMode === "twiceColor" && <RangeField label="TWICE scaling" value={parameters.colorShift} minimum={1} maximum={10} output={`${parameters.colorShift} / 10`} onChange={(colorShift) => setParameters((current) => ({ ...current, colorShift }))} />}
+            {commandMode === "builtIn" && definition?.animationId && <RangeField label="Pattern ID" value={parameters.animationId} minimum={definition.animationId.minimum} maximum={definition.animationId.maximum} output={`${parameters.animationId} / 9`} onChange={(animationId) => setParameters((current) => ({ ...current, animationId }))} />}
+            {commandMode === "builtIn" && definition?.speed && <RangeField label="Firmware speed" value={parameters.speed} minimum={definition.speed.minimum} maximum={definition.speed.maximum} output={`${parameters.speed} / ${definition.speed.maximum}`} onChange={(speed) => setParameters((current) => ({ ...current, speed }))} />}
+            {commandMode === "palette" && <RangeField label="Palette index" value={paletteIndex} minimum={0} maximum={27} output={`0x${paletteIndex.toString(16).padStart(2, "0").toUpperCase()} / 0x1B`} onChange={setPaletteIndex} />}
+            {commandMode === "fixedPattern" && definition?.speed && <RangeField label="Rotation speed" value={parameters.speed} minimum={0} maximum={3} output={`${parameters.speed} / 3`} onChange={(speed) => setParameters((current) => ({ ...current, speed }))} />}
+            {commandMode === "fixedPattern" && <RangeField label="Pattern scaling" value={parameters.hue} minimum={0} maximum={10} output={`${parameters.hue} / 10`} onChange={(hue) => setParameters((current) => ({ ...current, hue }))} />}
+
+            <button className="primary-button wide" type="button" disabled={snapshot.sending || commandPacket.length === 0} onClick={() => void run(commandPacket, selectedOption.label, updateCommandState())}>Send {selectedOption.label}</button>
+            <div className={`command-line ${snapshot.sending ? "sending" : ""}`} role="status"><i />{state.lastCommand}</div>
+          </div>
+          <aside className="builder-summary">
+            <span className="section-label">SELECTED COMMAND</span><h3>{selectedOption.label}</h3><p>{selectedOption.description}</p>
+            <div className="packet-box"><span>Packet</span><code>{commandPacket.length ? packetLabel(commandPacket) : "—"}</code></div>
+          </aside>
         </div>
       </article>
 
       <article className="card section-card">
-        <div className="card-heading"><div><span className="section-label">ANIMATION LAB</span><h2>Build a custom effect</h2></div><span className="helper">Protocol-safe controls</span></div>
-        <div className="builder-grid">
-          <div className="builder-controls">
-            <label className="field"><span>Animation family</span><select value={animationMode} onChange={(event) => { const mode = event.target.value; const next = adapter.customAnimations[mode]; setAnimationMode(mode); setParameters((current) => ({ ...current, speed: next.speed?.defaultValue ?? current.speed, hue: next.hue?.defaultValue ?? current.hue, animationId: next.animationId?.defaultValue ?? current.animationId, colorShift: next.colorShift?.defaultValue ?? current.colorShift })); }}>{Object.entries(adapter.customAnimations).map(([id, item]) => <option key={id} value={id}>{item.name}{item.experimental ? " · experimental" : ""}</option>)}</select></label>
-            {definition.usesColor && <label className="field"><span>Animation color</span><input className="large-color" type="color" value={parameters.color} onChange={(event) => setParameters((current) => ({ ...current, color: event.target.value }))} /></label>}
-            {definition.speed && animationMode !== "blink" && <RangeField label="Firmware speed" value={parameters.speed} minimum={definition.speed.minimum} maximum={definition.speed.maximum} output={`${parameters.speed} / ${definition.speed.maximum}`} onChange={(speed) => setParameters((current) => ({ ...current, speed }))} />}
-            {animationMode === "blink" && <RangeField label="Target blink rate" value={targetRate} minimum={10} maximum={600} output={`${targetRate} blinks/min · speed ${effectiveParameters.speed}`} onChange={setTargetRate} />}
-            {definition.hue && <RangeField label="Starting hue" value={parameters.hue} minimum={definition.hue.minimum} maximum={definition.hue.maximum} output={`${parameters.hue} / 255`} onChange={(hue) => setParameters((current) => ({ ...current, hue }))} />}
-            {definition.animationId && <RangeField label="Built-in pattern" value={parameters.animationId} minimum={definition.animationId.minimum} maximum={definition.animationId.maximum} output={`${parameters.animationId} / 9`} onChange={(animationId) => setParameters((current) => ({ ...current, animationId }))} />}
-            {definition.colorShift && <RangeField label="Color shift" value={parameters.colorShift} minimum={definition.colorShift.minimum} maximum={definition.colorShift.maximum} output={`${parameters.colorShift} / 255`} onChange={(colorShift) => setParameters((current) => ({ ...current, colorShift }))} />}
-            <button className="primary-button wide" type="button" disabled={snapshot.sending} onClick={() => void run(animationPacket, definition.name, { poweredOff: false, activeScene: null, activeAnimation: animationMode, previewColor: definition.usesColor ? parameters.color : definition.previewColor || state.color, previewEffect: definition.previewEffect, previewName: definition.name, previewDescription: definition.description })}>Apply custom animation</button>
-          </div>
-          <aside className="builder-summary">
-            <span className="summary-orb" style={{ "--effect-color": definition.usesColor ? parameters.color : definition.previewColor || "#8b6cff" } as React.CSSProperties} />
-            <span className="section-label">SELECTED EFFECT</span><h3>{definition.name}</h3><p>{definition.description}</p>
-            {definition.experimental && <span className="warning-pill">Experimental</span>}
-            <div className="packet-box"><span>Packet preview</span><code>{packetLabel(animationPacket)}</code></div>
-          </aside>
+        <div className="card-heading"><div><span className="section-label">POWER</span><h2>Lightstick power</h2></div></div>
+        <div className="button-grid">
+          <button className="dark-button" type="button" disabled={snapshot.sending} onClick={() => void run(adapter.commands.powerOn(), "Power on", { poweredOff: false })}>Turn on</button>
+          <button className="secondary-button" type="button" disabled={snapshot.sending} onClick={() => void run(adapter.commands.powerOff(), "Power off", { poweredOff: true, activeScene: null, activeAnimation: null })}>Turn off</button>
         </div>
       </article>
     </div>
