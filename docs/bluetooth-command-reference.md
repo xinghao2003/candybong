@@ -111,6 +111,33 @@ The handler schedules LED opcode `0`. The timer dispatcher sends zero RGBW to
 the selected group. It does not erase the saved RGB values, so `FF 11` can
 restore the previous color.
 
+## Feedback and response behavior
+
+The BLE receive handler does not send a response for every command. A traced
+`ble_uart_write()` call proves that the firmware constructed an outbound frame,
+but static analysis alone does not prove that the frame is delivered as a
+notification on the Nordic response characteristic rather than sent through
+an internal or bridge path.
+
+The most relevant response paths are:
+
+| Incoming command | Traced outbound behavior | Measurement use |
+|---|---|---|
+| `FF 11`, `FF 12`, `FF 13`, `FF 14` | LED state/timer update only; no direct BLE reply in the handler | No firmware acknowledgment proven |
+| `FF 15` | Calls `ble_led_send_reply()` after scheduling the palette color; constructs `FF 15 03 <three fields> <checksum>` | Strongest known solid-color feedback candidate |
+| `FF E1`..`FF E6` | LED state/timer update only in the traced branches | No firmware acknowledgment proven; this includes direct RGB `FF E6` |
+| `FF E7` | Emits a short `FF E7` packet with the supplied fields and checksum | Possible command feedback; capture should confirm delivery |
+| `FF 16`, `FF 18`, `FF 1A`, `FF 21` | Constructs status, bridge, or parameter packets | Outbound status/bridge traffic, not ordinary LED acknowledgments |
+| `FF A0`..`FF AF` | Several branches emit acknowledgments or frame readbacks | Protocol feedback, but the frame protocol is still conditional/unsafe |
+| `FF C1`..`FF CA`, `FF AD` | Forwards configuration or bridge packets | Outbound relay traffic; not safe lighting feedback |
+| `FF E9`, `FF EB`, `FF ED` | Echo or short control/status packets | Diagnostic/control feedback |
+
+For the web latency probe, use `FF 15` so the GATT write, the matching
+`FF 15 03` response, and the physical LED transition can be correlated. The
+response is emitted after the firmware schedules the palette path; it is not a
+proof that the LED driver has already finished updating. `FF E6` remains useful
+as a separate arbitrary-RGB write test, but it has no traced command reply.
+
 ## Measurement, bridge, and control commands
 
 These commands are parser-supported but are not ordinary direct LED controls.

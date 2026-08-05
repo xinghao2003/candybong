@@ -5,6 +5,11 @@ import { TrackStudio } from "./track-studio.js";
 import { CaptureGuide } from "./capture-guide.js";
 import { AlignmentGuide } from "./align-guide.js";
 import { CameraLumaTracker, cameraErrorMessage, cameraSupportMessage } from "./camera-luma.js";
+import {
+  CALIBRATION_REPETITIONS,
+  LatencyCalibrationSession,
+  createCalibrationProfiles,
+} from "./latency-calibration.js";
 
 const defaultAdapter = LIGHTSTICK_ADAPTERS[0];
 const FACTORY_PALETTE_STORAGE_KEY = "candybong-factory-palette-v1";
@@ -23,11 +28,12 @@ const MAX_DIAGNOSTIC_ENTRIES = 100;
 const LATENCY_PROBE_COUNT = 5;
 const LATENCY_PROBE_GAP_MS = 250;
 const LATENCY_RX_TIMEOUT_MS = 1000;
+const LATENCY_DARK_SETTLE_MS = 400;
 const LATENCY_FLASH_MIN_DELAY_MS = 700;
 const LATENCY_FLASH_MAX_DELAY_MS = 2000;
 const LATENCY_TAP_TIMEOUT_MS = 10000;
 const LATENCY_CAMERA_TIMEOUT_MS = 4000;
-const LATENCY_CAMERA_SETTLE_MS = 400;
+const FF15_REPLY_PREFIX = [0xff, 0x15, 0x03];
 const MUSIC_WRITE_INTERVAL_MS = 125;
 const MUSIC_DIAGNOSTIC_INTERVAL_MS = 1000;
 const MUSIC_MODE_LABELS = {
@@ -66,6 +72,9 @@ const state = {
   diagnostics: [],
   latency: {
     running: false,
+    calibrationActive: false,
+    calibrationSession: null,
+    calibrationReport: null,
     tapActive: false,
     pendingRtt: null,
     taps: [],
@@ -86,6 +95,8 @@ const state = {
     restoreWriteAt: null,
     flashOnMs: null,
     flashOffMs: null,
+    flashReplyMs: null,
+    flashReplyEntry: null,
   },
   poweredOff: false,
   sending: false,
@@ -169,6 +180,14 @@ const elements = {
   clearFactoryResultButton: document.querySelector("#clearFactoryResultButton"),
   responseStatus: document.querySelector("#responseStatus"),
   latencyStatus: document.querySelector("#latencyStatus"),
+  latencyCalibrationButton: document.querySelector("#latencyCalibrationButton"),
+  latencyCalibrationCancelButton: document.querySelector("#latencyCalibrationCancelButton"),
+  latencyCalibrationProgress: document.querySelector("#latencyCalibrationProgress"),
+  latencyCalibrationSummary: document.querySelector("#latencyCalibrationSummary"),
+  latencyCalibrationTable: document.querySelector("#latencyCalibrationTable"),
+  latencyCalibrationApplyButton: document.querySelector("#latencyCalibrationApplyButton"),
+  latencyCalibrationExportButton: document.querySelector("#latencyCalibrationExportButton"),
+  latencyCalibrationVideo: document.querySelector("#latencyCalibrationVideo"),
   latencyRunProbesButton: document.querySelector("#latencyRunProbesButton"),
   latencyProbeList: document.querySelector("#latencyProbeList"),
   latencyProbeSummary: document.querySelector("#latencyProbeSummary"),
@@ -385,7 +404,7 @@ function setLatencyStatus(message, style = null) {
 }
 
 function updateLatencyControls() {
-  const baseLocked = !isConnected() || state.sending || state.latency.running;
+  const baseLocked = !isConnected() || state.sending || state.latency.running || state.latency.calibrationActive;
   const cameraLocked = state.latency.tapActive || state.latency.cameraTestActive;
   elements.latencyRunProbesButton.disabled = baseLocked || cameraLocked;
   elements.latencyTapButton.disabled = baseLocked || cameraLocked || (state.latency.tapActive && state.latency.flashStartedAt == null);
@@ -394,12 +413,15 @@ function updateLatencyControls() {
   elements.latencyGuideReset.disabled = !state.latency.cameraOn;
   elements.latencyFlashButton.disabled = baseLocked || cameraLocked || !state.latency.cameraOn;
   elements.latencyFlashButton.textContent = state.latency.cameraTestActive ? "Testing…" : "Run flash test";
+  elements.latencyCalibrationButton.disabled = !isConnected() || state.sending || state.latency.running || state.latency.tapActive || state.latency.cameraTestActive || state.latency.calibrationActive;
+  elements.latencyCalibrationCancelButton.disabled = !state.latency.calibrationActive;
   if (!state.latency.running && !state.latency.tapActive && !state.latency.cameraTestActive) {
-    setLatencyStatus(isConnected() ? "Ready" : "Not connected", null);
+    if (!state.latency.calibrationActive) setLatencyStatus(isConnected() ? "Ready" : "Not connected", null);
   }
 }
 
 function cancelLatencyTests() {
+  state.latency.calibrationSession?.cancel();
   if (state.latency.pendingRtt) {
     const entry = state.latency.pendingRtt;
     state.latency.pendingRtt = null;
@@ -427,10 +449,22 @@ async function latencyPreamble() {
   if (state.music.active || state.music.starting) stopMusicReactive("Stopped by latency test");
 }
 
-// Resolves when the next response notification arrives, or after the timeout.
-function armRtt() {
+async function prepareLatencyDarkBaseline() {
+  if (!isConnected()) throw new Error("The Candybong disconnected before the latency baseline");
+
+  const packet = state.adapter.commands.powerOff();
+  addDiagnostic("TX", "Latency baseline · power off", packet, "tx");
+  await writeCharacteristic(packet);
+
+  // FF 12 schedules the LED-off path in firmware. The write promise alone
+  // does not prove that the selected LED group is already dark.
+  await new Promise((resolve) => window.setTimeout(resolve, LATENCY_DARK_SETTLE_MS));
+}
+
+// Resolves when the expected response notification arrives, or after the timeout.
+function armRtt(expectedPrefix = null) {
   if (!state.responseCharacteristic) return null;
-  const entry = {};
+  const entry = { expectedPrefix };
   entry.promise = new Promise((resolve) => {
     entry.resolve = resolve;
   });
@@ -442,9 +476,9 @@ function armRtt() {
   return entry;
 }
 
-async function probeOnce(packet, label) {
+async function probeOnce(packet, label, { expectedResponse = null } = {}) {
   addDiagnostic("TX", label, packet, "tx");
-  const rtt = armRtt();
+  const rtt = expectedResponse ? armRtt(expectedResponse) : null;
   const writeStart = performance.now();
   let writeMs = null;
   try {
@@ -458,14 +492,20 @@ async function probeOnce(packet, label) {
       window.clearTimeout(rtt.timer);
       rtt.resolve(null);
     }
-    return { label, writeMs, echoMs: null, echoState: "failed" };
+    return { label, writeMs, replyMs: null, replyState: "failed" };
   }
-  const rxAt = await rtt?.promise;
+
+  if (!expectedResponse) {
+    return { label, writeMs, replyMs: null, replyState: "not_expected" };
+  }
+
+  const response = await rtt?.promise;
   return {
     label,
     writeMs,
-    echoMs: rxAt == null ? null : Math.max(0, rxAt - writeStart),
-    echoState: rxAt == null ? (rtt ? "timeout" : "unavailable") : "ok",
+    replyMs: response == null ? null : Math.max(0, response.at - writeStart),
+    replyState: response == null ? (rtt ? "timeout" : "unavailable") : "ok",
+    replyPacket: response?.packet || null,
   };
 }
 
@@ -474,10 +514,13 @@ function renderLatencyProbeList(results) {
   for (const probe of results) {
     const item = document.createElement("li");
     const write = probe.writeMs == null ? "—" : `${probe.writeMs.toFixed(0)} ms`;
-    const echo = probe.echoMs != null
-      ? `${probe.echoMs.toFixed(0)} ms`
-      : probe.echoState === "timeout" ? "no echo" : probe.echoState === "failed" ? "failed" : "n/a";
-    item.textContent = `${probe.label}: write ${write} · echo ${echo}`;
+    const reply = probe.replyMs != null
+      ? `${probe.replyMs.toFixed(0)} ms`
+      : probe.replyState === "timeout" ? "no reply"
+        : probe.replyState === "failed" ? "failed"
+          : probe.replyState === "not_expected" ? "not expected"
+            : "n/a";
+    item.textContent = `${probe.label}: write ${write} · FF 15 reply ${reply}`;
     elements.latencyProbeList.append(item);
   }
 }
@@ -492,12 +535,12 @@ function statsLabel(times) {
 
 function renderLatencyProbeSummary(results) {
   const writeTimes = results.filter((probe) => probe.writeMs != null).map((probe) => probe.writeMs);
-  const echoTimes = results.filter((probe) => probe.echoMs != null).map((probe) => probe.echoMs);
+  const replyTimes = results.filter((probe) => probe.replyMs != null).map((probe) => probe.replyMs);
   const writeStats = statsLabel(writeTimes);
-  const echoStats = statsLabel(echoTimes);
-  elements.latencyProbeSummary.textContent = `Write ${writeStats} · RX echo ${echoStats}`;
-  if (writeTimes.length || echoTimes.length) {
-    addDiagnostic("SYS", `Latency probes: write ${writeStats} · RX echo ${echoStats}`, null, "status");
+  const replyStats = replyTimes.length ? statsLabel(replyTimes) : "no replies";
+  elements.latencyProbeSummary.textContent = `Write ${writeStats} · FF 15 reply ${replyStats}`;
+  if (writeTimes.length || replyTimes.length) {
+    addDiagnostic("SYS", `Latency probes: write ${writeStats} · FF 15 reply ${replyStats}`, null, "status");
   }
 }
 
@@ -513,26 +556,216 @@ async function runLatencyProbes() {
 
   const wasPoweredOff = state.poweredOff;
   const color = state.color;
-  const brightness = Math.max(1, state.brightness);
+  const restoreBrightness = state.brightness;
+  // These are distinct known FF 15 palette colors. FF 15 is used here because
+  // the firmware emits a matching FF 15 03 response after scheduling the LED path.
+  const paletteIndices = [0x01, 0x0e, 0x14, 0x00, 0x0a];
   const packets = Array.from({ length: LATENCY_PROBE_COUNT }, (_, index) =>
-    state.adapter.commands.staticColor(index % 2 === 0 ? color : "#ffffff", index % 2 === 0 ? brightness : 10));
+    state.adapter.commands.factoryColor(paletteIndices[index % paletteIndices.length]));
   const results = [];
-  for (let index = 0; index < packets.length; index += 1) {
-    if (index > 0) await new Promise((resolve) => window.setTimeout(resolve, LATENCY_PROBE_GAP_MS));
-    results.push(await probeOnce(packets[index], `Latency probe ${index + 1}`));
-    renderLatencyProbeList(results);
-  }
-  renderLatencyProbeSummary(results);
+  let baselinePrepared = false;
 
-  if (wasPoweredOff && isConnected()) {
-    const packet = state.adapter.commands.powerOff();
-    addDiagnostic("TX", "Latency restore · power off", packet, "tx");
-    writeCharacteristic(packet, false).catch((error) => console.error(error));
+  try {
+    await prepareLatencyDarkBaseline();
+    baselinePrepared = true;
+
+    for (let index = 0; index < packets.length; index += 1) {
+      if (index > 0) await new Promise((resolve) => window.setTimeout(resolve, LATENCY_PROBE_GAP_MS));
+      results.push(await probeOnce(packets[index], `Latency probe ${index + 1}`, {
+        expectedResponse: FF15_REPLY_PREFIX,
+      }));
+      renderLatencyProbeList(results);
+    }
+    renderLatencyProbeSummary(results);
+  } catch (error) {
+    console.error(error);
+    elements.latencyProbeSummary.textContent = "Probe failed";
+    addDiagnostic("ERR", `Latency baseline/probe failed: ${error.message || "Bluetooth error"}`, null, "error");
+  } finally {
+    if (baselinePrepared && isConnected()) {
+      const restorePacket = wasPoweredOff
+        ? state.adapter.commands.powerOff()
+        : state.adapter.commands.staticColor(color, restoreBrightness);
+      const restoreLabel = wasPoweredOff ? "Latency restore · power off" : "Latency restore · previous color";
+      addDiagnostic("TX", restoreLabel, restorePacket, "tx");
+      try {
+        await writeCharacteristic(restorePacket);
+      } catch (error) {
+        console.error(error);
+        addDiagnostic("ERR", `Latency restore failed: ${error.message || "Bluetooth error"}`, null, "error");
+      }
+    }
+
+    state.latency.running = false;
+    updateLatencyControls();
+    setLatencyStatus(isConnected() ? "Ready" : "Not connected", null);
+  }
+}
+
+async function writeCalibrationCommand(packet, expectedPrefix = null) {
+  const response = expectedPrefix ? armRtt(expectedPrefix) : null;
+  const writeStart = performance.now();
+  addDiagnostic("TX", `Calibration · ${packetLabel(packet)}`, packet, "tx");
+  try {
+    await writeCharacteristic(packet, false);
+  } catch (error) {
+    if (response) {
+      if (state.latency.pendingRtt === response) state.latency.pendingRtt = null;
+      window.clearTimeout(response.timer);
+      response.resolve(null);
+    }
+    throw error;
+  }
+  const writeComplete = performance.now();
+  const reply = await response?.promise;
+  return {
+    writeStart,
+    writeComplete,
+    writeMs: writeComplete - writeStart,
+    replyAt: reply?.at ?? null,
+    replyMs: reply ? Math.max(0, reply.at - writeStart) : null,
+    replyPacket: reply?.packet || null,
+  };
+}
+
+function formatCalibrationMs(value) {
+  return value == null ? "—" : `${Math.round(value)} ms`;
+}
+
+function renderLatencyCalibrationReport(report) {
+  state.latency.calibrationReport = report;
+  const recommended = report?.global?.recommendedCueOffsetMs;
+  const globalP95 = report?.global?.globalP95SoundToLightMs;
+  if (!report) {
+    elements.latencyCalibrationSummary.textContent = "No calibration yet";
+    elements.latencyCalibrationTable.replaceChildren();
+    elements.latencyCalibrationApplyButton.disabled = true;
+    elements.latencyCalibrationExportButton.disabled = true;
+    return;
   }
 
-  state.latency.running = false;
+  const warning = report.warnings?.length ? ` · ${report.warnings[0]}` : "";
+  elements.latencyCalibrationSummary.textContent = recommended == null
+    ? `No applicable global offset${warning}`
+    : `Recommended cue offset ${recommended} ms · global p95 ${formatCalibrationMs(globalP95)}${warning}`;
+  elements.latencyCalibrationApplyButton.disabled = recommended == null;
+  elements.latencyCalibrationExportButton.disabled = false;
+
+  const head = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  ["Profile", "Valid", "Sound → LED median", "Sound → LED p95", "Reply"].forEach((label) => {
+    const cell = document.createElement("th");
+    cell.scope = "col";
+    cell.textContent = label;
+    headRow.append(cell);
+  });
+  head.append(headRow);
+  const body = document.createElement("tbody");
+  for (const profileReport of report.profileReports) {
+    const row = document.createElement("tr");
+    const cells = [
+      profileReport.label,
+      `${profileReport.validCount}/${profileReport.sampleCount}`,
+      formatCalibrationMs(profileReport.stats.soundToLight.medianMs),
+      formatCalibrationMs(profileReport.stats.soundToLight.p95Ms),
+      profileReport.replyCount ? `${profileReport.replyCount} samples` : "none",
+    ];
+    cells.forEach((value) => {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.append(cell);
+    });
+    body.append(row);
+  }
+  elements.latencyCalibrationTable.replaceChildren(head, body);
+}
+
+function exportLatencyCalibration() {
+  const report = state.latency.calibrationReport;
+  if (!report) return;
+  const blob = new Blob([`${JSON.stringify(report, null, 2)}\n`], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "candybong-latency-calibration.json";
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function applyLatencyCalibrationOffset() {
+  const offset = state.latency.calibrationReport?.global?.recommendedCueOffsetMs;
+  if (offset == null || !trackStudio) return;
+  trackStudio.setCueOffsetMs(offset);
+  addDiagnostic("SYS", `Applied calibration cue offset · ${offset} ms`, null, "status");
+  showToast(`Cue offset set to ${offset} ms`);
+}
+
+async function runAutomatedLatencyCalibration() {
+  if (!isConnected() || state.latency.calibrationActive || state.latency.running || state.latency.tapActive || state.latency.cameraTestActive) return;
+  state.latency.calibrationActive = true;
+  state.latency.calibrationReport = null;
+  const wasPoweredOff = state.poweredOff;
+  const restoreColor = state.color;
+  const restoreBrightness = state.brightness;
   updateLatencyControls();
-  setLatencyStatus(isConnected() ? "Ready" : "Not connected", null);
+  renderLatencyCalibrationReport(null);
+  elements.latencyCalibrationProgress.textContent = "Preparing calibration…";
+  setLatencyStatus("Calibration starting…", "listening");
+
+  try {
+    await latencyPreamble();
+    if (!isConnected()) throw new Error("The Candybong disconnected before calibration started");
+    const profiles = createCalibrationProfiles(state.adapter);
+    const session = new LatencyCalibrationSession({
+      video: elements.latencyCalibrationVideo,
+      profiles,
+      powerOffPacket: state.adapter.commands.powerOff(),
+      litBaselinePacket: state.adapter.commands.factoryColor(0x00),
+      repetitions: CALIBRATION_REPETITIONS,
+      writeCommand: writeCalibrationCommand,
+      isConnected,
+      metadata: {
+        deviceName: state.device?.name || "",
+        adapter: state.adapter.label,
+        repetitions: CALIBRATION_REPETITIONS,
+        profileCount: profiles.length,
+      },
+      onSensorStatus: (message) => {
+        elements.latencyCalibrationProgress.textContent = message;
+      },
+      onProgress: ({ definition, repetition, repetitions, completed, total }) => {
+        elements.latencyCalibrationProgress.textContent = `${definition.label} · trial ${repetition}/${repetitions} · ${completed}/${total}`;
+      },
+    });
+    state.latency.calibrationSession = session;
+    const report = await session.run();
+    renderLatencyCalibrationReport(report);
+    addDiagnostic("SYS", `Automated calibration complete · ${report.global.recommendedCueOffsetMs ?? "no"} ms recommended offset`, null, "status");
+    setLatencyStatus("Calibration complete", null);
+  } catch (error) {
+    console.error(error);
+    elements.latencyCalibrationProgress.textContent = "Calibration stopped";
+    elements.latencyCalibrationSummary.textContent = error.message || "Calibration failed";
+    addDiagnostic("ERR", `Automated calibration failed: ${error.message || "Bluetooth, camera, or microphone error"}`, null, "error");
+    setLatencyStatus("Calibration failed", "warning");
+  } finally {
+    state.latency.calibrationSession = null;
+    if (isConnected()) {
+      const restorePacket = wasPoweredOff
+        ? state.adapter.commands.powerOff()
+        : state.adapter.commands.staticColor(restoreColor, restoreBrightness);
+      addDiagnostic("TX", "Calibration restore", restorePacket, "tx");
+      try {
+        await writeCharacteristic(restorePacket);
+      } catch (error) {
+        console.error(error);
+        addDiagnostic("ERR", `Calibration restore failed: ${error.message || "Bluetooth error"}`, null, "error");
+      }
+    }
+    state.latency.calibrationActive = false;
+    updateLatencyControls();
+    if (isConnected()) setLatencyStatus("Ready", null);
+  }
 }
 
 function restoreLatencyFlash() {
@@ -568,8 +801,8 @@ async function startLatencyTapTest() {
   }
 
   state.latency.flashStartedAt = performance.now();
-  const flashPacket = state.adapter.commands.staticColor("#ffffff", 10);
-  addDiagnostic("TX", "Latency flash · white", flashPacket, "tx");
+  const flashPacket = state.adapter.commands.factoryColor(0x00);
+  addDiagnostic("TX", "Latency flash · white (FF 15)", flashPacket, "tx");
   writeCharacteristic(flashPacket, false).catch((error) => {
     console.error(error);
     setLatencyStatus("Flash failed", "warning");
@@ -603,9 +836,9 @@ function renderLatencyTapResult() {
   elements.latencyTapResult.textContent = `Last ${last} ms · best ${best} ms · avg ${avg} ms (${taps.length} ${taps.length === 1 ? "tap" : "taps"})`;
 }
 
-// Camera flash test: the camera watches the lightstick while it flashes white,
-// timing the write until the visible change. The settle write before the flash
-// puts the light on a steady color so the flash is the only edge the camera sees.
+// Camera flash test: the camera watches the lightstick while FF 15 selects white,
+// timing the write until the visible change. The dark baseline before the flash
+// makes the rising edge unambiguous.
 function cameraFlashSample(sample) {
   if (!state.latency.cameraTestActive) return;
   if (state.latency.pendingRise && sample.edge === "rise") {
@@ -639,6 +872,15 @@ function sendLatencyFlashRestore() {
   }, LATENCY_CAMERA_TIMEOUT_MS);
 }
 
+function clearLatencyFlashReply() {
+  const entry = state.latency.flashReplyEntry;
+  state.latency.flashReplyEntry = null;
+  if (!entry) return;
+  if (state.latency.pendingRtt === entry) state.latency.pendingRtt = null;
+  window.clearTimeout(entry.timer);
+  entry.resolve(null);
+}
+
 async function runCameraFlashTest() {
   if (!isConnected() || state.latency.running || state.latency.tapActive || state.latency.cameraTestActive || !state.latency.cameraOn) return;
   if (state.color.toLowerCase() === "#ffffff" && state.brightness >= 9) {
@@ -651,6 +893,8 @@ async function runCameraFlashTest() {
   state.latency.restoreBrightness = state.brightness;
   state.latency.flashOnMs = null;
   state.latency.flashOffMs = null;
+  state.latency.flashReplyMs = null;
+  state.latency.flashReplyEntry = null;
   state.latency.pendingRise = null;
   state.latency.pendingRestore = null;
   updateLatencyControls();
@@ -661,25 +905,35 @@ async function runCameraFlashTest() {
     return;
   }
 
-  if (!state.latency.wasPoweredOff) {
-    const settlePacket = state.adapter.commands.staticColor(state.latency.restoreColor, state.latency.restoreBrightness);
-    addDiagnostic("TX", "Latency flash settle · steady color", settlePacket, "tx");
-    writeCharacteristic(settlePacket, false).catch((error) => console.error(error));
+  try {
+    await prepareLatencyDarkBaseline();
+  } catch (error) {
+    console.error(error);
+    cancelCameraFlashTest();
+    return;
   }
-  await new Promise((resolve) => window.setTimeout(resolve, LATENCY_CAMERA_SETTLE_MS));
   if (!isConnected()) {
     cancelCameraFlashTest();
     return;
   }
 
   state.latency.flashWriteAt = performance.now();
-  const flashPacket = state.adapter.commands.staticColor("#ffffff", 10);
-  addDiagnostic("TX", "Latency flash · white (camera)", flashPacket, "tx");
+  const flashReply = armRtt(FF15_REPLY_PREFIX);
+  state.latency.flashReplyEntry = flashReply;
+  if (flashReply) {
+    flashReply.promise.then((response) => {
+      if (response == null) return;
+      state.latency.flashReplyMs = Math.max(0, response.at - state.latency.flashWriteAt);
+      addDiagnostic("SYS", `Camera FF 15 reply · ${Math.round(state.latency.flashReplyMs)} ms`, response.packet, "status");
+    });
+  }
+  const flashPacket = state.adapter.commands.factoryColor(0x00);
+  addDiagnostic("TX", "Latency flash · white (FF 15 camera)", flashPacket, "tx");
+  state.latency.pendingRise = true;
   writeCharacteristic(flashPacket, false).catch((error) => {
     console.error(error);
     cancelCameraFlashTest();
   });
-  state.latency.pendingRise = true;
   state.latency.pendingRiseTimer = window.setTimeout(() => {
     if (state.latency.pendingRise) {
       state.latency.pendingRise = null;
@@ -697,9 +951,12 @@ function finishCameraFlashTest() {
   const parts = [];
   if (state.latency.flashOnMs != null) parts.push(`flash on ${Math.round(state.latency.flashOnMs)} ms`);
   else parts.push("flash not seen");
+  if (state.latency.flashReplyMs != null) parts.push(`FF 15 reply ${Math.round(state.latency.flashReplyMs)} ms`);
+  else parts.push("FF 15 reply not seen");
   if (state.latency.flashOffMs != null) parts.push(`restore ${Math.round(state.latency.flashOffMs)} ms`);
   elements.latencyFlashResult.textContent = `Last test: ${parts.join(" · ")}`;
   addDiagnostic("SYS", `Camera latency: ${parts.join(", ")}`, null, "status");
+  clearLatencyFlashReply();
   state.latency.pendingRise = null;
   state.latency.pendingRestore = null;
   state.latency.flashWriteAt = null;
@@ -718,7 +975,9 @@ function cancelCameraFlashTest() {
   state.latency.pendingRestore = null;
   state.latency.flashWriteAt = null;
   state.latency.restoreWriteAt = null;
+  state.latency.flashReplyMs = null;
   if (restoreNeeded) restoreLatencyFlash();
+  clearLatencyFlashReply();
   elements.latencyFlashResult.textContent = "Test cancelled";
   updateLatencyControls();
 }
@@ -1126,13 +1385,16 @@ function handleResponseValue(event) {
   if (!value) return;
   const packet = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
   addDiagnostic("RX", "Device response", packet, "rx");
-  // Resolve the pending latency probe: TX timestamp is stored at write time.
   const entry = state.latency.pendingRtt;
-  if (entry) {
-    state.latency.pendingRtt = null;
-    window.clearTimeout(entry.timer);
-    entry.resolve(performance.now());
-  }
+  if (!entry) return;
+
+  const matchesExpected = !entry.expectedPrefix
+    || entry.expectedPrefix.every((byte, index) => packet[index] === byte);
+  if (!matchesExpected) return;
+
+  state.latency.pendingRtt = null;
+  window.clearTimeout(entry.timer);
+  entry.resolve({ at: performance.now(), packet });
 }
 
 function clearResponseCharacteristic() {
@@ -1561,6 +1823,13 @@ elements.clearDiagnosticsButton.addEventListener("click", () => {
 });
 
 elements.latencyRunProbesButton.addEventListener("click", runLatencyProbes);
+elements.latencyCalibrationButton.addEventListener("click", runAutomatedLatencyCalibration);
+elements.latencyCalibrationCancelButton.addEventListener("click", () => {
+  state.latency.calibrationSession?.cancel();
+  elements.latencyCalibrationProgress.textContent = "Cancelling…";
+});
+elements.latencyCalibrationApplyButton.addEventListener("click", applyLatencyCalibrationOffset);
+elements.latencyCalibrationExportButton.addEventListener("click", exportLatencyCalibration);
 
 elements.latencyCameraButton.addEventListener("click", async () => {
   if (state.latency.cameraTestActive) return;

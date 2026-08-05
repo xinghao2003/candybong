@@ -498,15 +498,35 @@
           <span class="tool-status" id="latencyStatus">Not connected</span>
         </summary>
         <div class="tool-panel-content">
-          <p class="tool-description">Three ways to measure how long a command takes to reach the lightstick: an automatic Bluetooth round-trip probe, a tap test for the delay you actually see, and a camera-observed flash test that excludes human reaction time.</p>
+          <p class="tool-description">Use the automated calibration for a sound-to-light synchronization offset. The lower cards remain useful for isolating Bluetooth transport, human perception, and camera-only LED timing.</p>
 
           <div class="latency-grid">
+            <div class="latency-card latency-card-wide">
+              <div class="latency-card-heading">
+                <strong>Automated light–sound calibration</strong>
+                <span>20 trials per safe command profile</span>
+              </div>
+              <p class="latency-card-copy">The browser plays a short calibration click while it sends each lighting command. A combined camera and microphone capture measures the physical sound-to-LED offset, while Bluetooth writes and firmware replies are recorded as diagnostic milestones. Keep the microphone near the show speaker and center the lightstick in the preview.</p>
+              <div class="latency-calibration-actions">
+                <button class="button button-primary" id="latencyCalibrationButton" type="button" disabled>Run automated calibration</button>
+                <button class="button button-secondary" id="latencyCalibrationCancelButton" type="button" disabled>Cancel</button>
+                <button class="button button-secondary" id="latencyCalibrationApplyButton" type="button" disabled>Apply recommended offset</button>
+                <button class="button button-secondary" id="latencyCalibrationExportButton" type="button" disabled>Export JSON</button>
+              </div>
+              <video class="align-guide-video" id="latencyCalibrationVideo" muted playsinline autoplay hidden aria-label="Camera preview for automated latency calibration"></video>
+              <p class="latency-summary" id="latencyCalibrationProgress" aria-live="polite">Ready to calibrate</p>
+              <p class="latency-summary" id="latencyCalibrationSummary" aria-live="polite">No calibration yet</p>
+              <div class="latency-calibration-table-wrap">
+                <table class="latency-calibration-table" id="latencyCalibrationTable"></table>
+              </div>
+            </div>
+
             <div class="latency-card">
               <div class="latency-card-heading">
-                <strong>Bluetooth round-trip</strong>
-                <span>Automatic · uses TX and RX</span>
+                <strong>Bluetooth write probe</strong>
+                <span>Automatic · starts from dark</span>
               </div>
-              <p class="latency-card-copy">Sends five alternating color probes. <strong>Write</strong> is how long the device takes to acknowledge the write; <strong>Echo</strong> is how long until its response notification arrives. This measures the Bluetooth path only, not the LED's own reaction time.</p>
+              <p class="latency-card-copy">Turns the selected LED group off, waits for the dark baseline, then sends five built-in <code>FF 15</code> palette colors. <strong>Write</strong> measures the GATT write, and the reply timer matches the firmware's <code>FF 15 03</code> response. The camera test separately measures when the LED visibly changes.</p>
               <button class="button button-primary" id="latencyRunProbesButton" type="button" disabled>Run 5 probes</button>
               <ol class="latency-probe-list" id="latencyProbeList"></ol>
               <p class="latency-summary" id="latencyProbeSummary" aria-live="polite">No probes yet</p>

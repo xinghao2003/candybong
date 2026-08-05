@@ -2,6 +2,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test show-format.test.mjs blink-lab.test.mjs capture-guide.test.mjs"
+    "test": "node --test show-format.test.mjs blink-lab.test.mjs capture-guide.test.mjs latency-calibration.test.mjs"
   }
 }

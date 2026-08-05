@@ -189,6 +189,12 @@ export class TrackStudio {
     return Number.isFinite(this.elements.audio.duration) ? this.elements.audio.duration : (this.expectedTrack?.duration || 0);
   }
 
+  setCueOffsetMs(value) {
+    const offset = Math.max(0, Math.min(1000, Number(value) || 0));
+    this.cueOffsetMs = offset;
+    this.elements.cueOffset.value = String(offset);
+  }
+
   // Zoom window in seconds. An empty window (zoomStart === zoomEnd) means the full track.
   viewStart() {
     return this.zoomEnd > this.zoomStart ? this.zoomStart : 0;

@@ -395,10 +395,17 @@ h2 { margin: 5px 0 0; font-size: 18px; line-height: 1.25; letter-spacing: -0.02e
 .tool-description { margin-bottom: 16px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .latency-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .latency-card { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-soft); }
+.latency-card-wide { grid-column: 1 / -1; }
 .latency-card-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
 .latency-card-heading strong { font-size: 13px; }
 .latency-card-heading span { color: var(--muted); font-size: 9px; }
 .latency-card-copy { margin-bottom: 12px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.latency-calibration-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.latency-calibration-table-wrap { margin-top: 12px; overflow-x: auto; }
+.latency-calibration-table { width: 100%; border-collapse: collapse; color: var(--text); font-size: 10px; }
+.latency-calibration-table th, .latency-calibration-table td { padding: 7px 8px; border-top: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.latency-calibration-table th { color: var(--muted); font-size: 9px; font-weight: 700; text-transform: uppercase; }
+#latencyCalibrationVideo { width: min(100%, 420px); max-height: 320px; margin-top: 12px; border-radius: 12px; background: #161218; object-fit: cover; aspect-ratio: 1 / 1; }
 .latency-probe-list { max-height: 190px; margin: 12px 0 0; padding: 0; overflow-y: auto; list-style: none; }
 .latency-probe-list li { padding: 6px 0; border-top: 1px solid var(--line); color: var(--text); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; }
 .latency-summary { margin: 10px 0 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
