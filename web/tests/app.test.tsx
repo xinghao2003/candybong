@@ -36,6 +36,8 @@ beforeEach(() => {
   Object.defineProperty(globalThis, "isSecureContext", { configurable: true, value: true });
   window.history.replaceState(null, "", "/#controller");
   localStorage.clear();
+  document.documentElement.removeAttribute("data-theme");
+  document.documentElement.style.removeProperty("color-scheme");
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({} as CanvasRenderingContext2D);
   vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined);
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
@@ -44,6 +46,17 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("connection-gated app", () => {
+  test("toggles and persists the color theme", () => {
+    installBluetooth();
+    render(<BluetoothSessionProvider><App /></BluetoothSessionProvider>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Switch to dark mode" }));
+
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(localStorage.getItem("candybong-theme")).toBe("dark");
+    expect(screen.getByRole("button", { name: "Switch to light mode" })).toBeTruthy();
+  });
+
   test("renders only the connection gate before Bluetooth is ready", () => {
     installBluetooth();
     render(<BluetoothSessionProvider><App /></BluetoothSessionProvider>);

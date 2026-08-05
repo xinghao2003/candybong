@@ -6,6 +6,18 @@ import { ToolsView } from "./ToolsView";
 import type { AppTab, ControllerState, ToolId } from "./domain";
 
 const VALID_TABS = new Set<AppTab>(["controller", "tools", "device"]);
+const THEME_STORAGE_KEY = "candybong-theme";
+type Theme = "light" | "dark";
+
+function initialTheme(): Theme {
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === "light" || stored === "dark") return stored;
+  } catch {
+    // Browsers can deny storage access; the system preference is still useful.
+  }
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
 
 function tabFromHash(): AppTab {
   const value = window.location.hash.slice(1) as AppTab;
@@ -28,6 +40,7 @@ const initialControllerState: ControllerState = {
 export function App() {
   const { snapshot, connect, connectMock, disconnect } = useBluetoothSession();
   const [tab, setTabState] = useState<AppTab>(tabFromHash);
+  const [theme, setTheme] = useState<Theme>(initialTheme);
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
   const [controller, setController] = useState<ControllerState>(initialControllerState);
   const [manualControlSignal, setManualControlSignal] = useState(0);
@@ -43,6 +56,16 @@ export function App() {
   }, []);
 
   useEffect(() => () => window.clearTimeout(toastTimer.current), []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {
+      // Theme switching remains functional when persistent storage is unavailable.
+    }
+  }, [theme]);
 
   useEffect(() => {
     const handleHash = () => setTabState(tabFromHash());
@@ -85,7 +108,7 @@ export function App() {
 
   return (
     <>
-      {!connected && <ConnectionGate onConnect={handleConnect} onConnectMock={handleMockConnect} />}
+      {!connected && <ConnectionGate onConnect={handleConnect} onConnectMock={handleMockConnect} theme={theme} onToggleTheme={() => setTheme((value) => value === "dark" ? "light" : "dark")} />}
       <div className="app" hidden={!connected} aria-hidden={!connected}>
         <header className="app-header">
           <div className="brand-lockup">
@@ -94,6 +117,7 @@ export function App() {
           </div>
           <div className="header-actions">
             <span className="connected-pill"><i />Connected</span>
+            <ThemeToggle theme={theme} onToggle={() => setTheme((value) => value === "dark" ? "light" : "dark")} />
             <button className="icon-button" type="button" onClick={disconnect} aria-label="Disconnect Candybong" title="Disconnect">×</button>
           </div>
         </header>
@@ -142,7 +166,12 @@ export function App() {
   );
 }
 
-function ConnectionGate({ onConnect, onConnectMock }: { onConnect(): Promise<void>; onConnectMock(): Promise<void> }) {
+function ConnectionGate({ onConnect, onConnectMock, theme, onToggleTheme }: {
+  onConnect(): Promise<void>;
+  onConnectMock(): Promise<void>;
+  theme: Theme;
+  onToggleTheme(): void;
+}) {
   const { snapshot } = useBluetoothSession();
   const busy = snapshot.status === "requesting" || snapshot.status === "connecting";
   return (
@@ -150,6 +179,7 @@ function ConnectionGate({ onConnect, onConnectMock }: { onConnect(): Promise<voi
       <div className="gate-ambient gate-ambient-one" />
       <div className="gate-ambient gate-ambient-two" />
       <section className="gate-card" aria-labelledby="gate-title">
+        <div className="gate-toolbar"><ThemeToggle theme={theme} onToggle={onToggleTheme} /></div>
         <div className="gate-logo" aria-hidden="true"><span>C</span></div>
         <p className="eyebrow">TWICE CANDYBONG INFINITY</p>
         <h1 id="gate-title">Connect your Candybong</h1>
@@ -166,6 +196,16 @@ function ConnectionGate({ onConnect, onConnectMock }: { onConnect(): Promise<voi
         <p className="gate-help">Requires HTTPS or localhost and a Web Bluetooth browser.</p>
       </section>
     </main>
+  );
+}
+
+function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle(): void }) {
+  const nextTheme = theme === "dark" ? "light" : "dark";
+  return (
+    <button className="theme-toggle" type="button" onClick={onToggle} aria-label={`Switch to ${nextTheme} mode`} title={`Switch to ${nextTheme} mode`}>
+      <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
+      <span className="theme-toggle-label">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+    </button>
   );
 }
 
