@@ -5,7 +5,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test show-format.test.mjs blink-lab.test.mjs capture-guide.test.mjs latency-calibration.test.mjs"
+    "test": "node --test tests/show-format.test.mjs tests/blink-lab.test.mjs tests/capture-guide.test.mjs tests/latency-calibration.test.mjs"
   },
   "devDependencies": {
     "vite": "^8.1.4"

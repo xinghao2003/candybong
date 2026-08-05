@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cameraErrorMessage, cameraSupportMessage, createEdgeDetector } from "./camera-luma.js";
+import { cameraErrorMessage, cameraSupportMessage, createEdgeDetector } from "../src/camera-luma.js";
 import {
   SWEEP_STEP_TIMEOUT_MIN_MS,
   averagePeriodMs,
@@ -11,7 +11,7 @@ import {
   lumaOfHex,
   speedForTargetBpm,
   stepTimeoutMs,
-} from "./blink-lab.js";
+} from "../src/blink-lab.js";
 
 // Deterministic PRNG so noisy tests never flake.
 function makeRandom(seed) {

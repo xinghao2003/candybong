@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createShow, cueAtOrBefore, formatTimestamp, normalizeCue, normalizeShow, resolvePublishedAudioUrl } from "./show-format.js";
+import { createShow, cueAtOrBefore, formatTimestamp, normalizeCue, normalizeShow, resolvePublishedAudioUrl } from "../src/show-format.js";
 
 test("normalizes, rounds, and sorts cues", () => {
   const show = createShow({

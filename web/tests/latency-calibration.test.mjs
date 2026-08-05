@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LIGHTSTICK_ADAPTERS } from "./adapters.js";
+import { LIGHTSTICK_ADAPTERS } from "../src/adapters.js";
 import {
   CALIBRATION_MIN_VALID_TRIALS,
   CALIBRATION_REPLY_PREFIX,
@@ -11,7 +11,7 @@ import {
   percentile,
   rms,
   summarizeCalibrationProfile,
-} from "./latency-calibration.js";
+} from "../src/latency-calibration.js";
 
 test("calibration profiles cover the safe command families", () => {
   const profiles = createCalibrationProfiles(LIGHTSTICK_ADAPTERS[0]);

@@ -1,6 +1,12 @@
 # Candybong Infinity web controller
 
-This is a Vite-powered mobile controller for the TWICE Candybong Infinity. The UI is device-agnostic, while `adapters.js` keeps each lightstick's Bluetooth names, GATT UUIDs, and packet encoders in a separate profile. New lightsticks can be added there without rewriting the controls.
+This is a Vite-powered mobile controller for the TWICE Candybong Infinity. The UI is device-agnostic, while `src/adapters.js` keeps each lightstick's Bluetooth names, GATT UUIDs, and packet encoders in a separate profile. New lightsticks can be added there without rewriting the controls.
+
+The project is organized as follows:
+
+- `index.html` is the Vite HTML entry point and contains the app shell.
+- `src/` contains browser runtime modules and `styles.css`.
+- `tests/` contains the Node test-runner tests for the browser-independent modules.
 
 The current profile uses the same Nordic UART Service command characteristic as the Android proof of concept:
 
