@@ -26,7 +26,7 @@ const initialControllerState: ControllerState = {
 };
 
 export function App() {
-  const { snapshot, connect, disconnect } = useBluetoothSession();
+  const { snapshot, connect, connectMock, disconnect } = useBluetoothSession();
   const [tab, setTabState] = useState<AppTab>(tabFromHash);
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
   const [controller, setController] = useState<ControllerState>(initialControllerState);
@@ -70,11 +70,22 @@ export function App() {
     }
   }, [connect, publishedShow, selectTab]);
 
+  const handleMockConnect = useCallback(async () => {
+    const success = await connectMock();
+    if (!success) return;
+    if (publishedShow) {
+      setActiveTool("studio");
+      selectTab("tools");
+    } else {
+      selectTab(tabFromHash());
+    }
+  }, [connectMock, publishedShow, selectTab]);
+
   const beginManualControl = useCallback(() => setManualControlSignal((value) => value + 1), []);
 
   return (
     <>
-      {!connected && <ConnectionGate onConnect={handleConnect} />}
+      {!connected && <ConnectionGate onConnect={handleConnect} onConnectMock={handleMockConnect} />}
       <div className="app" hidden={!connected} aria-hidden={!connected}>
         <header className="app-header">
           <div className="brand-lockup">
@@ -131,7 +142,7 @@ export function App() {
   );
 }
 
-function ConnectionGate({ onConnect }: { onConnect(): Promise<void> }) {
+function ConnectionGate({ onConnect, onConnectMock }: { onConnect(): Promise<void>; onConnectMock(): Promise<void> }) {
   const { snapshot } = useBluetoothSession();
   const busy = snapshot.status === "requesting" || snapshot.status === "connecting";
   return (
@@ -143,9 +154,12 @@ function ConnectionGate({ onConnect }: { onConnect(): Promise<void> }) {
         <p className="eyebrow">TWICE CANDYBONG INFINITY</p>
         <h1 id="gate-title">Connect your Candybong</h1>
         <p className="gate-copy">Turn on your lightstick and keep it nearby. Your browser connects directly over Bluetooth.</p>
-        <button className="primary-button gate-button" type="button" onClick={() => void onConnect()} disabled={busy || snapshot.status === "unsupported"}>
-          <span aria-hidden="true">ᛒ</span>{busy ? (snapshot.status === "requesting" ? "Choose your Candybong…" : "Connecting…") : "Connect with Bluetooth"}
-        </button>
+        <div className="gate-actions">
+          <button className="primary-button gate-button" type="button" onClick={() => void onConnect()} disabled={busy || snapshot.status === "unsupported"}>
+            <span aria-hidden="true">ᛒ</span>{busy ? (snapshot.status === "requesting" ? "Choose your Candybong…" : "Connecting…") : "Connect with Bluetooth"}
+          </button>
+          {import.meta.env.DEV && <button className="secondary-button mock-connect-button" type="button" onClick={() => void onConnectMock()} disabled={busy}>Use mock Candybong</button>}
+        </div>
         <div className={`gate-status ${snapshot.status === "error" || snapshot.status === "unsupported" ? "error" : ""}`} role="status">
           <i />{snapshot.errorMessage || snapshot.supportMessage}
         </div>

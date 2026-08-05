@@ -65,6 +65,22 @@ describe("connection-gated app", () => {
     fireEvent.click(screen.getByRole("button", { name: "Disconnect Candybong" }));
     await screen.findByRole("heading", { name: "Connect your Candybong" });
   });
+
+  test("enters through the development mock and simulates a disconnect", async () => {
+    Reflect.deleteProperty(navigator, "bluetooth");
+    render(<BluetoothSessionProvider><App /></BluetoothSessionProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Use mock Candybong" }));
+    await screen.findByRole("heading", { name: "Make it yours." });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Device" }));
+    expect(await screen.findByText("Mock device")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Emit response" }));
+    expect(await screen.findByText("Simulated device response")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Simulate disconnect" }));
+    await screen.findByRole("heading", { name: "Connect your Candybong" });
+    expect(screen.getByRole("button", { name: /Connect with Bluetooth/i }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Use mock Candybong" }).hasAttribute("disabled")).toBe(false);
+  });
 });
 
 test("BluetoothSessionStore serializes writes and records diagnostics", async () => {
@@ -80,6 +96,20 @@ test("BluetoothSessionStore serializes writes and records diagnostics", async ()
   expect(command.writes).toEqual([[0xff, 0x11], [0xff, 0x12]]);
   await waitFor(() => expect(store.getSnapshot().sending).toBe(false));
   expect(store.getSnapshot().diagnostics.some((entry) => entry.label === "Power on")).toBe(true);
+  store.destroy();
+});
+
+test("BluetoothSessionStore supports mock writes and an injected failure", async () => {
+  const store = new BluetoothSessionStore();
+  expect(await store.connectMock()).toBe(true);
+  expect(store.getSnapshot().isMock).toBe(true);
+
+  await store.sendCommand(new Uint8Array([0xff, 0x11]), "Mock power on");
+  expect(store.getSnapshot().diagnostics.some((entry) => entry.label === "Mock acknowledgement")).toBe(true);
+
+  store.failNextMockCommand();
+  await expect(store.sendCommand(new Uint8Array([0xff, 0x12]), "Mock power off")).rejects.toThrow("Simulated Bluetooth write failure");
+  expect(store.getSnapshot().diagnostics.some((entry) => entry.direction === "ERR")).toBe(true);
   store.destroy();
 });
 

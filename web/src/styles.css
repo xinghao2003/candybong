@@ -37,6 +37,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .gate-copy { margin: 0 auto 26px; max-width: 330px; color: var(--muted); font-size: 14px; line-height: 1.65; }
 .gate-button { min-height: 54px; font-size: 14px; }
 .gate-button span { margin-right: 8px; font-size: 17px; }
+.gate-actions { display: grid; gap: 9px; }
+.mock-connect-button { min-height: 44px; }
 .gate-status { display: flex; min-height: 22px; align-items: center; justify-content: center; gap: 8px; margin-top: 17px; color: var(--success); font-size: 11px; font-weight: 700; }
 .gate-status i, .connected-pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .gate-status.error { color: #c63756; }
@@ -261,6 +263,7 @@ dd { margin: 0; text-align: right; font-size: 9px; font-weight: 700; overflow-wr
 .diagnostic-list strong { font-size: 9px; }
 .diagnostic-list code { color: var(--muted); }
 .diagnostic-list time { color: var(--muted); font-size: 7px; }
+.mock-controls-card { border-color: rgba(139,108,255,.24); background: linear-gradient(135deg,#fff,#faf8ff); }
 .empty-state { display: grid; min-height: 190px; place-items: center; align-content: center; color: var(--muted); text-align: center; }
 .empty-state > span { font-size: 30px; }
 .empty-state strong { margin-top: 8px; color: var(--text); font-size: 11px; }

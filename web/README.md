@@ -21,6 +21,8 @@ npm install
 npm run dev
 ```
 
+The development server includes a **Use mock Candybong** option on the connection screen. It exercises the complete UI without Bluetooth hardware. Open the Device tab while connected to emit a simulated response, fail the next command, or simulate a disconnect. Mock controls are guarded by `import.meta.env.DEV` and are not shown in production builds.
+
 Open the Vite URL through localhost. Real-device use requires a secure context and a Web Bluetooth browser. Chrome on Android is the primary target; iPhone and iPad require a browser that exposes Web Bluetooth.
 
 Validation commands:

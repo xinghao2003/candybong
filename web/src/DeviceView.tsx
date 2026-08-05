@@ -10,7 +10,7 @@ function durationLabel(startedAt: number | null, now: number): string {
 }
 
 export function DeviceView({ onDisconnect }: { onDisconnect(): void }) {
-  const { snapshot, clearDiagnostics } = useBluetoothSession();
+  const { snapshot, clearDiagnostics, emitMockResponse, failNextMockCommand, simulateMockDisconnect } = useBluetoothSession();
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -26,7 +26,7 @@ export function DeviceView({ onDisconnect }: { onDisconnect(): void }) {
         <article className="card device-identity">
           <div className="device-orb"><span>C</span></div>
           <div><span className="section-label">CONNECTED LIGHTSTICK</span><h2>{snapshot.deviceName}</h2><p>{adapter?.label}</p></div>
-          <span className="connected-pill"><i />Online</span>
+          <span className="connected-pill"><i />{snapshot.isMock ? "Mock device" : "Online"}</span>
         </article>
         <article className="card facts-card">
           <div className="card-heading"><div><span className="section-label">SESSION</span><h2>Connection facts</h2></div></div>
@@ -38,6 +38,18 @@ export function DeviceView({ onDisconnect }: { onDisconnect(): void }) {
           </dl>
         </article>
       </div>
+
+      {import.meta.env.DEV && snapshot.isMock && (
+        <article className="card section-card mock-controls-card">
+          <div className="card-heading"><div><span className="section-label">DEVELOPMENT MOCK</span><h2>Simulate device states</h2></div><span className="tool-badge active">No hardware</span></div>
+          <p className="card-copy">Exercise response, error, and connection-loss UI without sending Bluetooth commands.</p>
+          <div className="action-row">
+            <button className="secondary-button" type="button" onClick={emitMockResponse}>Emit response</button>
+            <button className="secondary-button" type="button" onClick={failNextMockCommand}>Fail next command</button>
+            <button className="secondary-button" type="button" onClick={simulateMockDisconnect}>Simulate disconnect</button>
+          </div>
+        </article>
+      )}
 
       <article className="card section-card">
         <div className="card-heading"><div><span className="section-label">BLUETOOTH PROFILE</span><h2>Nordic UART endpoints</h2></div><span className="helper">Browser-accessible facts</span></div>

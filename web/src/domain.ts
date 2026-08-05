@@ -69,6 +69,7 @@ export interface SessionSnapshot {
   writeWithResponse: boolean;
   writeWithoutResponse: boolean;
   responseStatus: "unavailable" | "listening";
+  isMock: boolean;
   sending: boolean;
   diagnostics: DiagnosticEntry[];
 }

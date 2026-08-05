@@ -6,7 +6,7 @@ import {
   useRef,
   useSyncExternalStore,
 } from "react";
-import { adapterForDevice, bluetoothRequestOptions } from "./adapters.js";
+import { adapterForDevice, bluetoothRequestOptions, LIGHTSTICK_ADAPTERS } from "./adapters.js";
 import type { DiagnosticEntry, DiagnosticDirection, LightstickAdapter, SessionSnapshot } from "./domain";
 
 const MAX_DIAGNOSTICS = 100;
@@ -29,6 +29,7 @@ function initialSnapshot(): SessionSnapshot {
     writeWithResponse: false,
     writeWithoutResponse: false,
     responseStatus: "unavailable",
+    isMock: false,
     sending: false,
     diagnostics: [],
   };
@@ -44,6 +45,7 @@ export class BluetoothSessionStore {
   private generation = 0;
   private diagnosticId = 0;
   private pendingWrites = 0;
+  private failNextMockWrite = false;
 
   getSnapshot = (): SessionSnapshot => this.snapshot;
 
@@ -135,15 +137,64 @@ export class BluetoothSessionStore {
     }
   };
 
+  connectMock = async (): Promise<boolean> => {
+    if (!import.meta.env.DEV) return false;
+    if (this.snapshot.status === "connected" && this.snapshot.isMock) return true;
+    const adapter = LIGHTSTICK_ADAPTERS[0] as LightstickAdapter | undefined;
+    if (!adapter) return false;
+
+    this.releaseConnection(false);
+    this.publish({ status: "requesting", errorMessage: "", supportMessage: "Development mock device" });
+    await Promise.resolve();
+    this.publish({ status: "connecting", deviceName: "Mock TWICE LightStick", adapter });
+    await Promise.resolve();
+    this.publish({
+      status: "connected",
+      errorMessage: "",
+      deviceName: "Mock TWICE LightStick",
+      adapter,
+      connectedAt: Date.now(),
+      writeWithResponse: true,
+      writeWithoutResponse: false,
+      responseStatus: "listening",
+      isMock: true,
+    });
+    this.addDiagnostic("SYS", "Connected to development mock Candybong");
+    return true;
+  };
+
   disconnect = (): void => {
+    if (this.snapshot.isMock) {
+      this.addDiagnostic("SYS", "Mock Candybong disconnected");
+      this.releaseConnection(true);
+      return;
+    }
     if (this.device?.gatt?.connected) this.device.gatt.disconnect();
     else this.releaseConnection(true);
+  };
+
+  emitMockResponse = (): void => {
+    if (!import.meta.env.DEV || !this.snapshot.isMock) return;
+    this.addDiagnostic("RX", "Simulated device response", [0xac, 0x01]);
+  };
+
+  failNextMockCommand = (): void => {
+    if (!import.meta.env.DEV || !this.snapshot.isMock) return;
+    this.failNextMockWrite = true;
+    this.addDiagnostic("WARN", "Next mock command will fail");
+  };
+
+  simulateMockDisconnect = (): void => {
+    if (!import.meta.env.DEV || !this.snapshot.isMock) return;
+    this.addDiagnostic("SYS", "Simulated connection loss");
+    this.releaseConnection(true);
   };
 
   sendCommand = (packet: Uint8Array, label: string): Promise<void> => {
     const generation = this.generation;
     const run = this.writeQueue.catch(() => undefined).then(async () => {
-      if (generation !== this.generation || !this.commandCharacteristic || this.snapshot.status !== "connected") {
+      const isMock = import.meta.env.DEV && this.snapshot.isMock;
+      if (generation !== this.generation || (!isMock && !this.commandCharacteristic) || this.snapshot.status !== "connected") {
         throw new Error("The Candybong is not connected.");
       }
       this.pendingWrites += 1;
@@ -151,14 +202,23 @@ export class BluetoothSessionStore {
       this.addDiagnostic("TX", label, packet);
       const characteristic = this.commandCharacteristic;
       try {
-        if (characteristic.properties.write && characteristic.writeValueWithResponse) {
+        if (isMock) {
+          await new Promise((resolve) => window.setTimeout(resolve, 35));
+          if (this.failNextMockWrite) {
+            this.failNextMockWrite = false;
+            throw new Error("Simulated Bluetooth write failure");
+          }
+          this.addDiagnostic("RX", "Mock acknowledgement", [0xac, packet[1] ?? 0x00]);
+        } else if (characteristic?.properties.write && characteristic.writeValueWithResponse) {
           await characteristic.writeValueWithResponse(packet as unknown as BufferSource);
-        } else if (characteristic.properties.writeWithoutResponse && characteristic.writeValueWithoutResponse) {
+        } else if (characteristic?.properties.writeWithoutResponse && characteristic.writeValueWithoutResponse) {
           await characteristic.writeValueWithoutResponse(packet as unknown as BufferSource);
-        } else if (characteristic.writeValueWithResponse) {
+        } else if (characteristic?.writeValueWithResponse) {
           await characteristic.writeValueWithResponse(packet as unknown as BufferSource);
-        } else {
+        } else if (characteristic) {
           await characteristic.writeValue(packet as unknown as BufferSource);
+        } else {
+          throw new Error("The Candybong command characteristic is unavailable.");
         }
         if (generation !== this.generation || this.snapshot.status !== "connected") {
           throw new Error("The Bluetooth session ended during the write.");
@@ -208,9 +268,12 @@ export class BluetoothSessionStore {
     this.commandCharacteristic = null;
     this.device = null;
     this.writeQueue = Promise.resolve();
+    this.failNextMockWrite = false;
     if (publishIdle) {
+      const support = supportMessage();
       this.publish({
-        status: this.snapshot.status === "unsupported" ? "unsupported" : "idle",
+        status: support.startsWith("Web Bluetooth ready") ? "idle" : "unsupported",
+        supportMessage: support,
         errorMessage: "",
         deviceName: "",
         adapter: null,
@@ -218,6 +281,7 @@ export class BluetoothSessionStore {
         writeWithResponse: false,
         writeWithoutResponse: false,
         responseStatus: "unavailable",
+        isMock: false,
         sending: false,
       });
     }
@@ -227,10 +291,14 @@ export class BluetoothSessionStore {
 interface BluetoothSessionValue {
   snapshot: SessionSnapshot;
   connect(): Promise<boolean>;
+  connectMock(): Promise<boolean>;
   disconnect(): void;
   sendCommand(packet: Uint8Array, label: string): Promise<void>;
   addDiagnostic(direction: DiagnosticDirection, label: string, packet?: Uint8Array | number[]): void;
   clearDiagnostics(): void;
+  emitMockResponse(): void;
+  failNextMockCommand(): void;
+  simulateMockDisconnect(): void;
 }
 
 const BluetoothSessionContext = createContext<BluetoothSessionStore | null>(null);
@@ -252,9 +320,13 @@ export function useBluetoothSession(): BluetoothSessionValue {
   return {
     snapshot,
     connect: store.connect,
+    connectMock: store.connectMock,
     disconnect: store.disconnect,
     sendCommand: store.sendCommand,
     addDiagnostic: store.addDiagnostic.bind(store),
     clearDiagnostics: store.clearDiagnostics,
+    emitMockResponse: store.emitMockResponse,
+    failNextMockCommand: store.failNextMockCommand,
+    simulateMockDisconnect: store.simulateMockDisconnect,
   };
 }
