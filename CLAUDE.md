@@ -9,4 +9,4 @@
 
 ## Notes
 - This repo is using `uv` for Python environment management. Use `uv run <script>` to run scripts in the correct environment.
-- Ghidra is available for firmware analysis. Use it directly when reverse-engineering the raw firmware.
+- Ghidra is available for firmware analysis. Use it directly when reverse-engineering the firmware. The firmware is zip like structure, you might need to extract before accessing internal files. Do you work on ghidra_work/ dir or ghidra_scripts/ dir so that it will be gitignore.
