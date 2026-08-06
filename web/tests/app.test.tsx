@@ -68,7 +68,7 @@ describe("connection-gated app", () => {
     const { command } = installBluetooth();
     render(<BluetoothSessionProvider><App /></BluetoothSessionProvider>);
     fireEvent.click(screen.getByRole("button", { name: /Connect with Bluetooth/i }));
-    await screen.findByRole("heading", { name: "Lightstick power" });
+    await screen.findByText("LED POWER");
     expect(screen.getByRole("tab", { name: "Controller" }).getAttribute("aria-selected")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Turn on" }));
     await waitFor(() => expect(command.writes).toContainEqual([0xff, 0x11]));
@@ -83,7 +83,7 @@ describe("connection-gated app", () => {
     Reflect.deleteProperty(navigator, "bluetooth");
     render(<BluetoothSessionProvider><App /></BluetoothSessionProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Use mock Candybong" }));
-    await screen.findByRole("heading", { name: "Lightstick power" });
+    await screen.findByText("LED POWER");
 
     fireEvent.click(screen.getByRole("tab", { name: "Device" }));
     expect(await screen.findByText("Mock device")).toBeTruthy();
@@ -106,7 +106,7 @@ test("BluetoothSessionStore serializes writes and records diagnostics", async ()
       store.sendCommand(new Uint8Array([0xff, 0x12]), "Power off"),
     ]);
   });
-  expect(command.writes).toEqual([[0xff, 0x11], [0xff, 0x12]]);
+  expect(command.writes).toEqual([[0xff, 0x16], [0xff, 0x11], [0xff, 0x12]]);
   await waitFor(() => expect(store.getSnapshot().sending).toBe(false));
   expect(store.getSnapshot().diagnostics.some((entry) => entry.label === "Power on")).toBe(true);
   store.destroy();

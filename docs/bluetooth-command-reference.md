@@ -30,7 +30,7 @@ are intentionally excluded from that list.
 | `FF 13` | Twice brightness/color adjustment | Behavior understood | [Color commands](ff13-ff15-e6-color-commands.md#ff-13-twice-adjustment) |
 | `FF 14` | Built-in animation selector | Behavior understood | [Color commands](ff13-ff15-e6-color-commands.md#ff-14-built-in-animations) |
 | `FF 15` | Solid-color palette | Behavior understood | [Color commands](ff13-ff15-e6-color-commands.md#ff-15-built-in-solid-color-palette) |
-| `FF 16` | Measurement/status code | Partially understood | This page |
+| `FF 16` | Measurement/status code | Confirmed battery-grade response | This page |
 | `FF 18` | Bridge/control request | Partially understood | This page |
 | `FF 1A` | Parameter/timer request | Partially understood | This page |
 | `FF 21` | Bridge/status packet | Partially understood | This page |
@@ -161,8 +161,21 @@ an out-of-range condition), then constructs an outgoing packet equivalent to:
 FF 16 02 StatusCode Checksum
 ```
 
-The source measurement and the meaning of each range are not identified yet.
-No direct LED update is shown in this path.
+The analyzed OTA package contains a ZIP-wrapped ARM application image; the
+source below is from that embedded `.bin`, not from the ZIP container itself.
+The source is a filtered ADC-like battery measurement. The firmware samples and
+averages a value in RAM, then maps it into 17 discrete grades:
+
+| Response byte | Meaning |
+|---:|---|
+| `0x01`..`0x10` | Lower battery grades, mapped from ADC thresholds |
+| `0x11` | Highest/full bucket; input is at least `0x3AE` |
+| `0x20` | Out-of-range or unknown |
+
+The same measurement path triggers a low-voltage protection action below about
+`0x28C`. The response is battery telemetry, but it is not a calibrated 0..100
+percentage. The web app queries `FF 16` after connecting and displays the
+discrete grade/full state.
 
 ### `FF 18`: fixed bridge request
 

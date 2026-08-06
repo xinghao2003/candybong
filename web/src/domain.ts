@@ -66,6 +66,9 @@ export interface SessionSnapshot {
   deviceName: string;
   adapter: LightstickAdapter | null;
   connectedAt: number | null;
+  transportLatencyMs: number | null;
+  batteryLevel: number | null;
+  batteryStatusCode: number | null;
   writeWithResponse: boolean;
   writeWithoutResponse: boolean;
   responseStatus: "unavailable" | "listening";

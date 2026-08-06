@@ -26,6 +26,9 @@ function initialSnapshot(): SessionSnapshot {
     deviceName: "",
     adapter: null,
     connectedAt: null,
+    transportLatencyMs: null,
+    batteryLevel: null,
+    batteryStatusCode: null,
     writeWithResponse: false,
     writeWithoutResponse: false,
     responseStatus: "unavailable",
@@ -41,6 +44,7 @@ export class BluetoothSessionStore {
   private device: BluetoothDevice | null = null;
   private commandCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
   private responseCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
+  private batteryCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
   private writeQueue: Promise<unknown> = Promise.resolve();
   private generation = 0;
   private diagnosticId = 0;
@@ -107,17 +111,37 @@ export class BluetoothSessionStore {
         this.addDiagnostic("WARN", message);
       }
 
+      let batteryLevel: number | null = null;
+      try {
+        const batteryService = await server.getPrimaryService("battery_service");
+        const battery = await batteryService.getCharacteristic("battery_level");
+        this.batteryCharacteristic = battery;
+        if (battery.properties.read && battery.readValue) {
+          batteryLevel = this.readBatteryLevel(await battery.readValue());
+        }
+        if ((battery.properties.notify || battery.properties.indicate) && battery.startNotifications) {
+          await battery.startNotifications();
+          battery.addEventListener("characteristicvaluechanged", this.handleBattery);
+        }
+      } catch {
+        this.batteryCharacteristic = null;
+      }
+
       this.publish({
         status: "connected",
         errorMessage: "",
         deviceName: device.name || adapter.label,
         adapter,
         connectedAt: Date.now(),
+        transportLatencyMs: null,
+        batteryLevel,
+        batteryStatusCode: null,
         writeWithResponse: Boolean(commandCharacteristic.properties.write),
         writeWithoutResponse: Boolean(commandCharacteristic.properties.writeWithoutResponse),
         responseStatus,
       });
       this.addDiagnostic("SYS", `Connected to ${device.name || adapter.label}`);
+      if (responseStatus === "listening") void this.sendCommand(new Uint8Array([0xff, 0x16]), "Read battery status").catch(() => undefined);
       return true;
     } catch (error) {
       const cancelled = error instanceof DOMException && error.name === "NotFoundError";
@@ -154,6 +178,9 @@ export class BluetoothSessionStore {
       deviceName: "Mock TWICE LightStick",
       adapter,
       connectedAt: Date.now(),
+      transportLatencyMs: null,
+      batteryLevel: null,
+      batteryStatusCode: null,
       writeWithResponse: true,
       writeWithoutResponse: false,
       responseStatus: "listening",
@@ -198,6 +225,7 @@ export class BluetoothSessionStore {
         throw new Error("The Candybong is not connected.");
       }
       this.pendingWrites += 1;
+      const startedAt = performance.now();
       this.publish({ sending: true });
       this.addDiagnostic("TX", label, packet);
       const characteristic = this.commandCharacteristic;
@@ -223,6 +251,7 @@ export class BluetoothSessionStore {
         if (generation !== this.generation || this.snapshot.status !== "connected") {
           throw new Error("The Bluetooth session ended during the write.");
         }
+        this.publish({ transportLatencyMs: performance.now() - startedAt });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Bluetooth write failed";
         this.addDiagnostic("ERR", `${label} failed: ${message}`);
@@ -245,8 +274,21 @@ export class BluetoothSessionStore {
     const characteristic = event.target as BluetoothRemoteGATTCharacteristic | null;
     const value = characteristic?.value;
     if (!value) return;
+    if (value.byteLength >= 4 && value.getUint8(0) === 0xff && value.getUint8(1) === 0x16 && value.getUint8(2) === 0x02) {
+      this.publish({ batteryStatusCode: value.getUint8(3) });
+    }
     this.addDiagnostic("RX", "Device response", new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
   };
+
+  private readonly handleBattery = (event: Event): void => {
+    const characteristic = event.target as BluetoothRemoteGATTCharacteristic | null;
+    if (characteristic?.value) this.publish({ batteryLevel: this.readBatteryLevel(characteristic.value) });
+  };
+
+  private readBatteryLevel(value: DataView): number | null {
+    const level = value.getUint8(0);
+    return level <= 100 ? level : null;
+  }
 
   private readonly handleGattDisconnected = (): void => {
     this.addDiagnostic("SYS", "Candybong disconnected");
@@ -260,11 +302,16 @@ export class BluetoothSessionStore {
       this.responseCharacteristic.removeEventListener("characteristicvaluechanged", this.handleResponse);
       void this.responseCharacteristic.stopNotifications?.().catch(() => undefined);
     }
+    if (this.batteryCharacteristic) {
+      this.batteryCharacteristic.removeEventListener("characteristicvaluechanged", this.handleBattery);
+      void this.batteryCharacteristic.stopNotifications?.().catch(() => undefined);
+    }
     if (this.device) {
       this.device.removeEventListener("gattserverdisconnected", this.handleGattDisconnected);
       if (this.device.gatt?.connected) this.device.gatt.disconnect();
     }
     this.responseCharacteristic = null;
+    this.batteryCharacteristic = null;
     this.commandCharacteristic = null;
     this.device = null;
     this.writeQueue = Promise.resolve();
@@ -278,6 +325,9 @@ export class BluetoothSessionStore {
         deviceName: "",
         adapter: null,
         connectedAt: null,
+        transportLatencyMs: null,
+        batteryLevel: null,
+        batteryStatusCode: null,
         writeWithResponse: false,
         writeWithoutResponse: false,
         responseStatus: "unavailable",

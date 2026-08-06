@@ -58,4 +58,6 @@ The show JSON and referenced audio must both resolve on the app's origin. The ve
 - Bluetooth write completion is not proof that the LEDs have visibly changed.
 - Perceived-effect tests include human reaction time.
 - Camera results include camera exposure and frame quantization.
+- Device latency is browser-to-GATT write completion, not a radio-only measurement or visible LED response.
+- The supplied TWICE firmware exposes Nordic UART rather than the standard Battery Service. Its custom `FF 16` query returns a discrete battery grade (`0x01..0x11`, with `0x11` as the full bucket and `0x20` unknown); the web app shows that grade and does not invent a percentage.
 - Automated sound-to-light calibration requires both camera and microphone permission and should be treated as a physical measurement, not inferred protocol timing.

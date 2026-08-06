@@ -9,6 +9,15 @@ function durationLabel(startedAt: number | null, now: number): string {
   return minutes ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
 }
 
+function batteryLabel(snapshot: { batteryLevel: number | null; batteryStatusCode: number | null }): string {
+  if (snapshot.batteryLevel != null) return `${snapshot.batteryLevel}%`;
+  const code = snapshot.batteryStatusCode;
+  if (code == null) return "Not exposed";
+  if (code === 0x11) return "Full · grade 17/17";
+  if (code === 0x20) return "Unknown · code 0x20";
+  return `Grade ${code}/17 · code 0x${code.toString(16).padStart(2, "0").toUpperCase()}`;
+}
+
 export function DeviceView({ onDisconnect }: { onDisconnect(): void }) {
   const { snapshot, clearDiagnostics, emitMockResponse, failNextMockCommand, simulateMockDisconnect } = useBluetoothSession();
   const [now, setNow] = useState(Date.now());
@@ -33,6 +42,8 @@ export function DeviceView({ onDisconnect }: { onDisconnect(): void }) {
           <dl className="facts-list">
             <div><dt>Profile</dt><dd>{adapter?.id || "—"}</dd></div>
             <div><dt>Connected for</dt><dd>{durationLabel(snapshot.connectedAt, now)}</dd></div>
+            <div><dt>Transport latency</dt><dd>{snapshot.transportLatencyMs == null ? "No write yet" : `${Math.round(snapshot.transportLatencyMs)} ms`}</dd></div>
+            <div><dt>Battery</dt><dd>{batteryLabel(snapshot)}</dd></div>
             <div><dt>Command writes</dt><dd>{snapshot.writeWithResponse ? "With response" : snapshot.writeWithoutResponse ? "Without response" : "Browser fallback"}</dd></div>
             <div><dt>Response channel</dt><dd className={snapshot.responseStatus === "listening" ? "success-text" : "muted-text"}>{snapshot.responseStatus === "listening" ? "Listening" : "Unavailable"}</dd></div>
           </dl>
@@ -58,7 +69,7 @@ export function DeviceView({ onDisconnect }: { onDisconnect(): void }) {
           <div><dt>Command characteristic</dt><dd><code>{String(adapter?.commandUuid || "—")}</code></dd></div>
           <div><dt>Response characteristic</dt><dd><code>{String(adapter?.responseUuid || "—")}</code></dd></div>
         </dl>
-        <p className="info-note">Battery level and firmware version are not exposed by the connected profile, so the app does not guess them.</p>
+        <p className="info-note">Latency is measured from a command write until the browser reports completion. This firmware reports a discrete battery grade through custom FF 16 status packets, not a standard percentage characteristic.</p>
       </article>
 
       <article className="card section-card diagnostics-card">

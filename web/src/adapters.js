@@ -245,7 +245,7 @@ export const LIGHTSTICK_ADAPTERS = [
 export function bluetoothRequestOptions() {
   return {
     filters: LIGHTSTICK_ADAPTERS.flatMap((adapter) => adapter.namePrefixes.map((namePrefix) => ({ namePrefix }))),
-    optionalServices: [...new Set(LIGHTSTICK_ADAPTERS.map((adapter) => adapter.serviceUuid))],
+    optionalServices: [...new Set([...LIGHTSTICK_ADAPTERS.map((adapter) => adapter.serviceUuid), "battery_service"])],
   };
 }
 
