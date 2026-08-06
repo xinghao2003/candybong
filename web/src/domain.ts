@@ -93,3 +93,16 @@ export interface ControllerState {
 export function packetLabel(packet: Uint8Array | number[]): string {
   return [...packet].map((byte) => byte.toString(16).padStart(2, "0")).join(" ").toUpperCase();
 }
+
+/**
+ * FF 16 battery grade (0x01..0x11) → approximate percentage, or null when the
+ * grade has no percentage (0x20 = no sample yet). The firmware's 17 grades are
+ * a nearly-linear voltage ladder from ~2.85 V (grade 1) to ~4.4 V at the cell
+ * (grade 0x11, above a normal 4.2 V full charge — so a fully charged stick
+ * usually reports 0x10, ≈94%). It is an approximation of remaining voltage
+ * headroom, not a capacity measurement.
+ */
+export function batteryPercentageFromStatusCode(code: number): number | null {
+  if (code === 0x20) return null;
+  return Math.round(((code - 0x01) * 100) / 0x10);
+}

@@ -196,10 +196,31 @@ dispatch `FUN_00027fac`). The sampled/averaged value lands at RAM `0x20002e20`,
 in the instance block next to the driver instance pointers `0x20002e1c` /
 `0x20002e28`.
 
+**Measurement mechanism.** The nRF52 SAADC (peripheral `0x40007000`) is
+configured with two channels (config block at flash `0x3b834`): channel 0 =
+AIN4 (battery through the PCB divider), gain 1/2, internal 0.6 V reference,
+10-bit result (0..1023, full scale at 1.2 V on AIN4); channel 1 = VDD directly,
+gain 1/6 (full scale at 3.6 V). No oversampling. Each conversion produces
+`[ch0, ch1]` in the result buffer; the IRQ-driven callback `FUN_00039350`
+stores both 16-bit samples in the instance (`ch0` at `0x20002e24`) and
+immediately restarts the conversion. `FUN_00038800` then maintains a
+3-sample moving average of the channel-0 sample: an accumulator sums samples
+and every third sample the battery value at `0x20002e20` is replaced by
+`sum / 3` and the accumulator resets. With `result = V_AIN4 / 1.2 * 1023`, the
+grade thresholds correspond to approximately `1.105 V` (full, `0x3AE`) down to
+`0.713 V` (`0x260`, grade 1) on AIN4 — with a ~1:4 PCB divider that is roughly
+4.4 V to 2.85 V at the cell.
+
+**Low-voltage action.** The same `FUN_00038800` checks the averaged value:
+below `0x28C` (652 ≈ 0.765 V on AIN4 ≈ ~3.0 V at the cell) it sets a low-
+battery flag, drives port P0.9 low (`0x5000050C` = P0 OUTCLR, bit 9), and
+schedules LED opcode 0 (LED off) through `schedule_led_command_opcode()`.
+Below the next critical level the firmware enters a system-off/power-down
+loop.
+
 The response is delivered through `FUN_0002ed10`, the same Nordic UART send
 path used by the `FF 15` reply — so it is observable as a BLE notification.
-The same measurement path triggers a low-voltage protection action below about
-`0x28C`. The web app queries `FF 16` after connecting and displays the discrete
+The web app queries `FF 16` after connecting and displays the discrete
 grade/full state.
 
 ### `FF 18`: fixed bridge request

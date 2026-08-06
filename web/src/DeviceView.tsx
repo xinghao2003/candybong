@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useBluetoothSession } from "./bluetooth-session";
-import { packetLabel } from "./domain";
+import { batteryPercentageFromStatusCode, packetLabel } from "./domain";
 
 function durationLabel(startedAt: number | null, now: number): string {
   if (!startedAt) return "Not connected";
@@ -13,9 +13,9 @@ function batteryLabel(snapshot: { batteryLevel: number | null; batteryStatusCode
   if (snapshot.batteryLevel != null) return `${snapshot.batteryLevel}%`;
   const code = snapshot.batteryStatusCode;
   if (code == null) return "Not exposed";
-  if (code === 0x11) return "Full · grade 17/17";
-  if (code === 0x20) return "Unknown · code 0x20";
-  return `Grade ${code}/17 · code 0x${code.toString(16).padStart(2, "0").toUpperCase()}`;
+  const percentage = batteryPercentageFromStatusCode(code);
+  if (percentage == null) return "Unknown";
+  return `≈${percentage}% · grade ${code}/17`;
 }
 
 export function DeviceView({ onDisconnect }: { onDisconnect(): void }) {
@@ -69,7 +69,7 @@ export function DeviceView({ onDisconnect }: { onDisconnect(): void }) {
           <div><dt>Command characteristic</dt><dd><code>{String(adapter?.commandUuid || "—")}</code></dd></div>
           <div><dt>Response characteristic</dt><dd><code>{String(adapter?.responseUuid || "—")}</code></dd></div>
         </dl>
-        <p className="info-note">Latency is measured from a command write until the browser reports completion. This firmware reports a discrete battery grade through custom FF 16 status packets, not a standard percentage characteristic.</p>
+        <p className="info-note">Latency is measured from a command write until the browser reports completion. This firmware reports battery state as a discrete 17-step grade through custom FF 16 status packets; the app approximates it as a percentage. Grade 0x11 (full) sits above a normal 4.2 V charge, so a fully charged stick typically shows ≈94%.</p>
       </article>
 
       <article className="card section-card diagnostics-card">
