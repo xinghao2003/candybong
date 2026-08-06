@@ -9,3 +9,4 @@
 
 ## Notes
 - This repo is using `uv` for Python environment management. Use `uv run <script>` to run scripts in the correct environment.
+- Ghidra is available for firmware analysis. Use it directly when reverse-engineering the raw firmware.
