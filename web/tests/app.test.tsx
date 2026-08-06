@@ -68,7 +68,7 @@ describe("connection-gated app", () => {
     const { command } = installBluetooth();
     render(<BluetoothSessionProvider><App /></BluetoothSessionProvider>);
     fireEvent.click(screen.getByRole("button", { name: /Connect with Bluetooth/i }));
-    await screen.findByRole("heading", { name: "Make it yours." });
+    await screen.findByRole("heading", { name: "Lightstick power" });
     expect(screen.getByRole("tab", { name: "Controller" }).getAttribute("aria-selected")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Turn on" }));
     await waitFor(() => expect(command.writes).toContainEqual([0xff, 0x11]));
@@ -83,7 +83,7 @@ describe("connection-gated app", () => {
     Reflect.deleteProperty(navigator, "bluetooth");
     render(<BluetoothSessionProvider><App /></BluetoothSessionProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Use mock Candybong" }));
-    await screen.findByRole("heading", { name: "Make it yours." });
+    await screen.findByRole("heading", { name: "Lightstick power" });
 
     fireEvent.click(screen.getByRole("tab", { name: "Device" }));
     expect(await screen.findByText("Mock device")).toBeTruthy();

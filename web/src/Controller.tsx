@@ -181,12 +181,16 @@ export function Controller({ state, setState, onBeforeCommand, notify }: {
 
   return (
     <div className="page controller-page">
-      <div className="page-heading">
-        <div><p className="eyebrow">LIGHT CONTROL</p><h1>Make it yours.</h1><p>Send documented safe lighting commands and adjust only the controls each command needs.</p></div>
-      </div>
+      <article className="card section-card">
+        <div className="card-heading"><div><span className="section-label">LED POWER</span></div></div>
+        <div className="button-grid">
+          <button className="dark-button" type="button" disabled={snapshot.sending} onClick={() => void run(adapter.commands.powerOn(), "Power on", { poweredOff: false })}>Turn on</button>
+          <button className="secondary-button" type="button" disabled={snapshot.sending} onClick={() => void run(adapter.commands.powerOff(), "Power off", { poweredOff: true, activeScene: null, activeAnimation: null })}>Turn off</button>
+        </div>
+      </article>
 
       <article className="card section-card">
-        <div className="card-heading"><div><span className="section-label">SAFE LIGHTING COMMANDS</span><h2>Choose a command</h2></div><span className="helper">Protocol allow-list</span></div>
+        <div className="card-heading"><div><span className="section-label">COMMANDS</span></div></div>
         <div className="builder-grid">
           <div className="builder-controls">
             <label className="field"><span>Command</span><select aria-label="Command" value={commandMode} onChange={(event) => selectCommand(event.target.value as CommandMode)}>{COMMAND_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
@@ -206,20 +210,9 @@ export function Controller({ state, setState, onBeforeCommand, notify }: {
             <button className="primary-button wide" type="button" disabled={snapshot.sending || commandPacket.length === 0} onClick={() => void run(commandPacket, selectedOption.label, updateCommandState())}>Send {selectedOption.label}</button>
             <div className={`command-line ${snapshot.sending ? "sending" : ""}`} role="status"><i />{state.lastCommand}</div>
           </div>
-          <aside className="builder-summary">
-            <span className="section-label">SELECTED COMMAND</span><h3>{selectedBuiltInPattern?.label ?? selectedOption.label}</h3><p>{selectedBuiltInPattern?.description ?? selectedOption.description}</p>
-            <div className="packet-box"><span>Packet</span><code>{commandPacket.length ? packetLabel(commandPacket) : "—"}</code></div>
-          </aside>
         </div>
       </article>
 
-      <article className="card section-card">
-        <div className="card-heading"><div><span className="section-label">POWER</span><h2>Lightstick power</h2></div></div>
-        <div className="button-grid">
-          <button className="dark-button" type="button" disabled={snapshot.sending} onClick={() => void run(adapter.commands.powerOn(), "Power on", { poweredOff: false })}>Turn on</button>
-          <button className="secondary-button" type="button" disabled={snapshot.sending} onClick={() => void run(adapter.commands.powerOff(), "Power off", { poweredOff: true, activeScene: null, activeAnimation: null })}>Turn off</button>
-        </div>
-      </article>
     </div>
   );
 }
