@@ -5,6 +5,7 @@ import {
   randomBlinkSpeedForRate,
 } from "./adapters.js";
 import { useBluetoothSession } from "./bluetooth-session";
+import { previewBackgroundFromHex, previewColorFromHex } from "./color-preview.js";
 import type { AnimationParameters, ControllerState, LightstickAdapter } from "./domain";
 import { packetLabel } from "./domain";
 
@@ -75,6 +76,9 @@ export function Controller({ state, setState, onBeforeCommand, notify }: {
   const definition = animationKey ? adapter.customAnimations[animationKey] : null;
   const targetRateDefinition = definition?.targetRate;
   const targetRate = targetRateDefinition?.tiers[rateTierIndex] ?? 0;
+  const previewBrightness = commandMode === "solid" ? parameters.brightness : state.brightness;
+  const devicePreviewColor = previewColorFromHex(parameters.color, previewBrightness);
+  const devicePreviewBackground = previewBackgroundFromHex(parameters.color, previewBrightness);
   const effectiveParameters = useMemo(() => ({
     ...parameters,
     speed: commandMode === "blink"
@@ -153,7 +157,7 @@ export function Controller({ state, setState, onBeforeCommand, notify }: {
           <div className="builder-controls">
             <label className="field"><span>Command</span><select aria-label="Command" value={commandMode} onChange={(event) => selectCommand(event.target.value as CommandMode)}>{COMMAND_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
 
-            {(commandMode === "blink" || commandMode === "fadeFast" || commandMode === "fadeSlow" || commandMode === "solid") && <label className="field"><span>Color</span><input className="large-color" type="color" value={parameters.color} onChange={(event) => setParameters((current) => ({ ...current, color: event.target.value }))} /></label>}
+            {(commandMode === "blink" || commandMode === "fadeFast" || commandMode === "fadeSlow" || commandMode === "solid") && <label className="field"><span>Color</span><span className="color-picker-row"><input className="large-color" type="color" value={parameters.color} onChange={(event) => setParameters((current) => ({ ...current, color: event.target.value }))} /><span className="color-preview-rectangle" role="img" aria-label={`Device preview ${devicePreviewColor}`} style={{ background: devicePreviewBackground }} /></span></label>}
 
             {(commandMode === "fadeFast" || commandMode === "fadeSlow") && definition?.speed && <RangeField label="Firmware speed" value={parameters.speed} minimum={definition.speed.minimum} maximum={definition.speed.maximum} output={`${parameters.speed} / ${definition.speed.maximum}`} onChange={(speed) => setParameters((current) => ({ ...current, speed }))} />}
             {(commandMode === "blink" || commandMode === "randomBlink") && targetRateDefinition && <RangeField label="Target blink rate" value={rateTierIndex} minimum={0} maximum={targetRateDefinition.tiers.length - 1} output={`${formatRate(targetRate)} blinks/min · speed ${effectiveParameters.speed}`} onChange={setRateTierIndex} />}
