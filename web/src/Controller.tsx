@@ -22,6 +22,26 @@ type CommandMode =
 
 type CommandParameters = AnimationParameters & { brightness: number };
 
+type BuiltInPattern = {
+  id: number;
+  label: string;
+  description: string;
+  usesSpeed: boolean;
+  minimumSpeed?: number;
+};
+
+const BUILT_IN_PATTERNS: BuiltInPattern[] = [
+  { id: 1, label: "Five-color fade cycle", description: "Loops through five built-in RGBW colors at your selected speed.", usesSpeed: true, minimumSpeed: 1 },
+  { id: 2, label: "20-color cycle", description: "Loops through 20 built-in colors at a firmware-fixed speed.", usesSpeed: false },
+  { id: 3, label: "Lights off", description: "Turns the selected LED group off.", usesSpeed: false },
+  { id: 4, label: "Random-color fade", description: "Fades toward randomly chosen firmware colors at a firmware-fixed speed.", usesSpeed: false },
+  { id: 5, label: "Orange/red-orange fade", description: "Alternates between orange and red-orange at your selected speed.", usesSpeed: true, minimumSpeed: 1 },
+  { id: 6, label: "Seven-color fade cycle", description: "Loops through seven built-in colors; the firmware adds 9 to your selected speed.", usesSpeed: true },
+  { id: 7, label: "Static all-off", description: "Applies the static all-off preset.", usesSpeed: false },
+  { id: 8, label: "Multicolor segments", description: "Applies a static multicolor segment pattern.", usesSpeed: false },
+  { id: 9, label: "TWICE static preset", description: "Applies the static TWICE/0x65 preset.", usesSpeed: false },
+];
+
 const COMMAND_OPTIONS: Array<{ id: CommandMode; label: string; description: string; animationKey?: string }> = [
   { id: "blink", label: "Blink", description: "Blink one RGB color at a target rate", animationKey: "blink" },
   { id: "fadeFast", label: "Fade fast", description: "Fade between black and one RGB color", animationKey: "pulse" },
@@ -40,6 +60,10 @@ const ANIMATION_KEY_BY_COMMAND: Partial<Record<CommandMode, string>> = Object.fr
 
 function optionFor(mode: CommandMode) {
   return COMMAND_OPTIONS.find((option) => option.id === mode) || COMMAND_OPTIONS[0];
+}
+
+function builtInPatternFor(id: number) {
+  return BUILT_IN_PATTERNS.find((pattern) => pattern.id === id) || BUILT_IN_PATTERNS[0];
 }
 
 function closestTierIndex(tiers: number[], target: number) {
@@ -74,6 +98,7 @@ export function Controller({ state, setState, onBeforeCommand, notify }: {
   const selectedOption = optionFor(commandMode);
   const animationKey = ANIMATION_KEY_BY_COMMAND[commandMode];
   const definition = animationKey ? adapter.customAnimations[animationKey] : null;
+  const selectedBuiltInPattern = commandMode === "builtIn" ? builtInPatternFor(parameters.animationId) : null;
   const targetRateDefinition = definition?.targetRate;
   const targetRate = targetRateDefinition?.tiers[rateTierIndex] ?? 0;
   const previewBrightness = commandMode === "solid" ? parameters.brightness : state.brightness;
@@ -145,6 +170,15 @@ export function Controller({ state, setState, onBeforeCommand, notify }: {
     };
   }
 
+  function selectBuiltInPattern(animationId: number) {
+    const pattern = builtInPatternFor(animationId);
+    setParameters((current) => ({
+      ...current,
+      animationId: pattern.id,
+      speed: pattern.minimumSpeed ? Math.max(pattern.minimumSpeed, current.speed) : current.speed,
+    }));
+  }
+
   return (
     <div className="page controller-page">
       <div className="page-heading">
@@ -163,8 +197,8 @@ export function Controller({ state, setState, onBeforeCommand, notify }: {
             {(commandMode === "blink" || commandMode === "randomBlink") && targetRateDefinition && <RangeField label="Target blink rate" value={rateTierIndex} minimum={0} maximum={targetRateDefinition.tiers.length - 1} output={`${formatRate(targetRate)} blinks/min · speed ${effectiveParameters.speed}`} onChange={setRateTierIndex} />}
             {commandMode === "solid" && <RangeField label="Brightness" value={parameters.brightness} minimum={0} maximum={10} output={`${parameters.brightness} / 10`} onChange={(brightness) => setParameters((current) => ({ ...current, brightness }))} />}
             {commandMode === "twiceColor" && <RangeField label="TWICE scaling" value={parameters.colorShift} minimum={1} maximum={10} output={`${parameters.colorShift} / 10`} onChange={(colorShift) => setParameters((current) => ({ ...current, colorShift }))} />}
-            {commandMode === "builtIn" && definition?.animationId && <RangeField label="Pattern ID" value={parameters.animationId} minimum={definition.animationId.minimum} maximum={definition.animationId.maximum} output={`${parameters.animationId} / 9`} onChange={(animationId) => setParameters((current) => ({ ...current, animationId }))} />}
-            {commandMode === "builtIn" && definition?.speed && <RangeField label="Firmware speed" value={parameters.speed} minimum={definition.speed.minimum} maximum={definition.speed.maximum} output={`${parameters.speed} / ${definition.speed.maximum}`} onChange={(speed) => setParameters((current) => ({ ...current, speed }))} />}
+            {commandMode === "builtIn" && definition?.animationId && <label className="field"><span>Pattern</span><select aria-label="Built-in pattern" value={parameters.animationId} onChange={(event) => selectBuiltInPattern(Number(event.target.value))}>{BUILT_IN_PATTERNS.map((pattern) => <option key={pattern.id} value={pattern.id}>{pattern.label}</option>)}</select></label>}
+            {commandMode === "builtIn" && selectedBuiltInPattern?.usesSpeed && definition?.speed && <RangeField label="Firmware speed" value={parameters.speed} minimum={selectedBuiltInPattern.minimumSpeed ?? definition.speed.minimum} maximum={definition.speed.maximum} output={`${parameters.speed} / ${definition.speed.maximum}`} onChange={(speed) => setParameters((current) => ({ ...current, speed }))} />}
             {commandMode === "palette" && <RangeField label="Palette index" value={paletteIndex} minimum={0} maximum={27} output={`0x${paletteIndex.toString(16).padStart(2, "0").toUpperCase()} / 0x1B`} onChange={setPaletteIndex} />}
             {commandMode === "fixedPattern" && definition?.speed && <RangeField label="Rotation speed" value={parameters.speed} minimum={0} maximum={3} output={`${parameters.speed} / 3`} onChange={(speed) => setParameters((current) => ({ ...current, speed }))} />}
             {commandMode === "fixedPattern" && <RangeField label="Pattern scaling" value={parameters.hue} minimum={0} maximum={10} output={`${parameters.hue} / 10`} onChange={(hue) => setParameters((current) => ({ ...current, hue }))} />}
@@ -173,7 +207,7 @@ export function Controller({ state, setState, onBeforeCommand, notify }: {
             <div className={`command-line ${snapshot.sending ? "sending" : ""}`} role="status"><i />{state.lastCommand}</div>
           </div>
           <aside className="builder-summary">
-            <span className="section-label">SELECTED COMMAND</span><h3>{selectedOption.label}</h3><p>{selectedOption.description}</p>
+            <span className="section-label">SELECTED COMMAND</span><h3>{selectedBuiltInPattern?.label ?? selectedOption.label}</h3><p>{selectedBuiltInPattern?.description ?? selectedOption.description}</p>
             <div className="packet-box"><span>Packet</span><code>{commandPacket.length ? packetLabel(commandPacket) : "—"}</code></div>
           </aside>
         </div>
