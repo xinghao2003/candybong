@@ -143,7 +143,7 @@ as a separate arbitrary-RGB write test, but it has no traced command reply.
 These commands are parser-supported but are not ordinary direct LED controls.
 They mainly construct packets for the firmware's UART/bridge path.
 
-### `FF 16`: internal measurement/status conversion
+### `FF 16`: battery measurement / status conversion
 
 **Format**
 
@@ -153,29 +153,54 @@ FF 16
 
 **Mechanism**
 
-The handler calls `somthing_huhuhu()` at `0x38958`. That helper maps an
-internal measurement into a small code from roughly `1..0x11` (or `0x20` for
-an out-of-range condition), then constructs an outgoing packet equivalent to:
+The analyzed OTA package contains a ZIP-wrapped ARM application image; the
+source below is from that embedded `.bin`, not from the ZIP container itself.
+The handler calls `somthing_huhuhu()` at `0x38958`. That helper reads a 16-bit
+value from RAM `0x20002e20` (pointer constant stored at flash `0x38a78`) and
+maps it into a discrete grade, then constructs an outgoing packet equivalent
+to:
 
 ```text
 FF 16 02 StatusCode Checksum
 ```
 
-The analyzed OTA package contains a ZIP-wrapped ARM application image; the
-source below is from that embedded `.bin`, not from the ZIP container itself.
-The source is a filtered ADC-like battery measurement. The firmware samples and
-averages a value in RAM, then maps it into 17 discrete grades:
+The measurement is a filtered SAADC battery reading, not a calibrated 0..100
+percentage. The exact grade mapping is:
 
-| Response byte | Meaning |
-|---:|---|
-| `0x01`..`0x10` | Lower battery grades, mapped from ADC thresholds |
-| `0x11` | Highest/full bucket; input is at least `0x3AE` |
-| `0x20` | Out-of-range or unknown |
+| Measured value (16-bit) | Response byte |
+|---|---:|
+| `0x3AE` or above | `0x11` (full) |
+| `0x398`..`0x3AD` | `0x10` |
+| `0x37B`..`0x397` | `0x0F` |
+| `0x36B`..`0x37A` | `0x0E` |
+| `0x359`..`0x36A` | `0x0D` |
+| `0x341`..`0x358` | `0x0C` |
+| `0x332`..`0x340` | `0x0B` |
+| `0x31D`..`0x331` | `0x0A` |
+| `0x2F3`..`0x31C` | `0x09` |
+| `0x2E3`..`0x2F2` | `0x08` |
+| `0x2D4`..`0x2E2` | `0x07` |
+| `0x2CB`..`0x2D3` | `0x06` |
+| `0x2B0`..`0x2CA` | `0x05` |
+| `0x295`..`0x2AF` | `0x04` |
+| `0x267`..`0x294` | `0x03` |
+| `0x260`..`0x266` | `0x02` |
+| `0x001`..`0x25F` | `0x01` |
+| `0` | `0x20` (no sample yet / unavailable) |
 
+**Measurement provenance** (traced): app init `FUN_0003b3b4` calls
+`FUN_0002dd8c` (the "adc_start" app-menu entry), which starts sampling through
+`FUN_0002dd24` and the nrfx SAADC driver (`FUN_000354c4` init,
+`FUN_00035374`/`FUN_00035418` channel setup, IRQ tail at `0x2ddb0`, event
+dispatch `FUN_00027fac`). The sampled/averaged value lands at RAM `0x20002e20`,
+in the instance block next to the driver instance pointers `0x20002e1c` /
+`0x20002e28`.
+
+The response is delivered through `FUN_0002ed10`, the same Nordic UART send
+path used by the `FF 15` reply — so it is observable as a BLE notification.
 The same measurement path triggers a low-voltage protection action below about
-`0x28C`. The response is battery telemetry, but it is not a calibrated 0..100
-percentage. The web app queries `FF 16` after connecting and displays the
-discrete grade/full state.
+`0x28C`. The web app queries `FF 16` after connecting and displays the discrete
+grade/full state.
 
 ### `FF 18`: fixed bridge request
 
@@ -390,12 +415,17 @@ The most useful next artifacts would be:
 
 ## Firmware evidence
 
+The image is a raw nRF52 application binary linked at base `0x26000` (the
+SoftDevice app region). The vector table at image offset 0 pins the base:
+initial SP `0x2000b8b8` (RAM) and reset vector `0x263c1` = base + `0x3C1`.
+File offset = flash address - `0x26000`.
+
 | Address | Function | Role |
 |---:|---|---|
 | `0x35dc0` | `ble_nus_data_handler` | BLE opcode dispatch |
 | `0x388a0` | `ble_led_send_reply` | Replies for the palette path |
 | `0x388fc` | `FUN_000388fc` | Builds forwarded `FF AD` packets |
-| `0x38958` | `somthing_huhuhu` | Converts internal measurement to `FF 16` status |
+| `0x38958` | `somthing_huhuhu` | Reads RAM battery value `0x20002e20`; builds `FF 16` status |
 | `0x38a84` | `FUN_00038a84` | Forwards `C1` plus four bytes |
 | `0x38af4` | `FUN_00038af4` | Forwards `C3` plus four bytes |
 | `0x38b60` | `FUN_00038b60` | Forwards a 14-byte configuration block |
@@ -403,6 +433,14 @@ The most useful next artifacts would be:
 | `0x38ca0` | `FUN_00038ca0` | Forwards mixed 14-byte configuration data |
 | `0x38d50` | `FUN_00038d50` | Builds the fixed `FF B4` bridge packet |
 | `0x38dac` | `FUN_00038dac` | Builds the dynamic `FF 21` bridge packet |
+| `0x2ed10` | `FUN_0002ed10` | Nordic UART outbound send (mem alloc + SVC); every traced reply routes through it |
+| `0x2dd8c` | `FUN_0002dd8c` | Starts battery ADC sampling ("adc_start" app-menu entry); called from app init `0x3b3b4` |
+| `0x2dd24` | `FUN_0002dd24` | Configures SAADC channels and starts the conversion |
+| `0x2ddb0` | SAADC IRQ tail | Clears the sample flag and restarts sampling |
+| `0x27fac` | `FUN_00027fac` | nrfx SAADC event dispatch; invokes the registered sample callback |
+| `0x354c4` | `FUN_000354c4` | nrfx SAADC init (channel config, callback registration) |
+| `0x312d0` | `FUN_000312d0` | Checksum helper used by all reply builders |
+| `0x38a78` | pointer literal | Holds RAM address `0x20002e20` of the 16-bit battery value |
 | `0x264ba` | `mem_zero` | Clears RAM; used to initialize A* readback payloads |
 | `0x26a1c` | `FUN_00026a1c` | Transmits/reads one 256-byte LED-controller segment |
 | `0x26c3c` | `FUN_00026c3c` | Sends the frame/output address command and waits for completion |
