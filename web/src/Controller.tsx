@@ -1,5 +1,9 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
-import { LIGHTSTICK_ADAPTERS, blinkSpeedForRate } from "./adapters.js";
+import {
+  LIGHTSTICK_ADAPTERS,
+  blinkSpeedForRate,
+  randomBlinkSpeedForRate,
+} from "./adapters.js";
 import { useBluetoothSession } from "./bluetooth-session";
 import type { AnimationParameters, ControllerState, LightstickAdapter } from "./domain";
 import { packetLabel } from "./domain";
@@ -37,6 +41,16 @@ function optionFor(mode: CommandMode) {
   return COMMAND_OPTIONS.find((option) => option.id === mode) || COMMAND_OPTIONS[0];
 }
 
+function closestTierIndex(tiers: number[], target: number) {
+  return tiers.reduce((bestIndex, rate, index) => (
+    Math.abs(rate - target) < Math.abs(tiers[bestIndex] - target) ? index : bestIndex
+  ), 0);
+}
+
+function formatRate(rate: number) {
+  return rate.toFixed(2).replace(/\.?(0+)$/, "");
+}
+
 export function Controller({ state, setState, onBeforeCommand, notify }: {
   state: ControllerState;
   setState: Dispatch<SetStateAction<ControllerState>>;
@@ -55,13 +69,19 @@ export function Controller({ state, setState, onBeforeCommand, notify }: {
     colorShift: 10,
   });
   const [paletteIndex, setPaletteIndex] = useState(0);
-  const [targetRate, setTargetRate] = useState(60);
+  const [rateTierIndex, setRateTierIndex] = useState(0);
   const selectedOption = optionFor(commandMode);
   const animationKey = ANIMATION_KEY_BY_COMMAND[commandMode];
   const definition = animationKey ? adapter.customAnimations[animationKey] : null;
+  const targetRateDefinition = definition?.targetRate;
+  const targetRate = targetRateDefinition?.tiers[rateTierIndex] ?? 0;
   const effectiveParameters = useMemo(() => ({
     ...parameters,
-    speed: commandMode === "blink" ? (blinkSpeedForRate(targetRate) ?? parameters.speed) : parameters.speed,
+    speed: commandMode === "blink"
+      ? (blinkSpeedForRate(targetRate) ?? parameters.speed)
+      : commandMode === "randomBlink"
+        ? (randomBlinkSpeedForRate(targetRate) ?? parameters.speed)
+        : parameters.speed,
   }), [commandMode, parameters, targetRate]);
   const commandPacket = useMemo(() => {
     try {
@@ -91,6 +111,9 @@ export function Controller({ state, setState, onBeforeCommand, notify }: {
     setCommandMode(mode);
     const key = ANIMATION_KEY_BY_COMMAND[mode];
     const next = key ? adapter.customAnimations[key] : null;
+    if (next?.targetRate) {
+      setRateTierIndex(closestTierIndex(next.targetRate.tiers, next.targetRate.defaultValue));
+    }
     setParameters((current) => ({
       ...current,
       speed: mode === "fixedPattern"
@@ -132,8 +155,8 @@ export function Controller({ state, setState, onBeforeCommand, notify }: {
 
             {(commandMode === "blink" || commandMode === "fadeFast" || commandMode === "fadeSlow" || commandMode === "solid") && <label className="field"><span>Color</span><input className="large-color" type="color" value={parameters.color} onChange={(event) => setParameters((current) => ({ ...current, color: event.target.value }))} /></label>}
 
-            {(commandMode === "fadeFast" || commandMode === "fadeSlow" || commandMode === "randomBlink") && definition?.speed && <RangeField label="Firmware speed" value={parameters.speed} minimum={definition.speed.minimum} maximum={definition.speed.maximum} output={`${parameters.speed} / ${definition.speed.maximum}`} onChange={(speed) => setParameters((current) => ({ ...current, speed }))} />}
-            {commandMode === "blink" && <RangeField label="Target blink rate" value={targetRate} minimum={10} maximum={600} output={`${targetRate} blinks/min · speed ${effectiveParameters.speed}`} onChange={setTargetRate} />}
+            {(commandMode === "fadeFast" || commandMode === "fadeSlow") && definition?.speed && <RangeField label="Firmware speed" value={parameters.speed} minimum={definition.speed.minimum} maximum={definition.speed.maximum} output={`${parameters.speed} / ${definition.speed.maximum}`} onChange={(speed) => setParameters((current) => ({ ...current, speed }))} />}
+            {(commandMode === "blink" || commandMode === "randomBlink") && targetRateDefinition && <RangeField label="Target blink rate" value={rateTierIndex} minimum={0} maximum={targetRateDefinition.tiers.length - 1} output={`${formatRate(targetRate)} blinks/min · speed ${effectiveParameters.speed}`} onChange={setRateTierIndex} />}
             {commandMode === "solid" && <RangeField label="Brightness" value={parameters.brightness} minimum={0} maximum={10} output={`${parameters.brightness} / 10`} onChange={(brightness) => setParameters((current) => ({ ...current, brightness }))} />}
             {commandMode === "twiceColor" && <RangeField label="TWICE scaling" value={parameters.colorShift} minimum={1} maximum={10} output={`${parameters.colorShift} / 10`} onChange={(colorShift) => setParameters((current) => ({ ...current, colorShift }))} />}
             {commandMode === "builtIn" && definition?.animationId && <RangeField label="Pattern ID" value={parameters.animationId} minimum={definition.animationId.minimum} maximum={definition.animationId.maximum} output={`${parameters.animationId} / 9`} onChange={(animationId) => setParameters((current) => ({ ...current, animationId }))} />}

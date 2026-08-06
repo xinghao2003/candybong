@@ -70,19 +70,27 @@ export function normalizedBlinkSpeed(speed) {
   return Math.min(100, supplied < 95 ? supplied + 5 : supplied);
 }
 
-export function blinkRateForSpeed(speed) {
-  const normalized = normalizedBlinkSpeed(speed);
-  const timerTicks = Math.floor((normalized * 32768 + 1000) / 2000);
-  return 491520 / (normalized * timerTicks);
+function timerTicks(value) {
+  return Math.floor((value * 32768 + 1000) / 2000);
 }
 
-export function blinkSpeedForRate(targetBpm) {
+export function blinkRateForSpeed(speed) {
+  const normalized = normalizedBlinkSpeed(speed);
+  return 491520 / (normalized * timerTicks(normalized));
+}
+
+export function randomBlinkRateForSpeed(speed) {
+  const normalized = normalizedBlinkSpeed(speed);
+  return 163840 / timerTicks(normalized);
+}
+
+function speedForRate(targetBpm, rateForSpeed) {
   const target = Number(targetBpm);
   if (!Number.isFinite(target) || target <= 0) return null;
   let bestSpeed = 0;
   let bestError = Infinity;
   for (let speed = 0; speed <= 255; speed += 1) {
-    const error = Math.abs(blinkRateForSpeed(speed) - target);
+    const error = Math.abs(rateForSpeed(speed) - target);
     if (error < bestError) {
       bestSpeed = speed;
       bestError = error;
@@ -91,15 +99,32 @@ export function blinkSpeedForRate(targetBpm) {
   return bestSpeed;
 }
 
+export function blinkSpeedForRate(targetBpm) {
+  return speedForRate(targetBpm, blinkRateForSpeed);
+}
+
+export function randomBlinkSpeedForRate(targetBpm) {
+  return speedForRate(targetBpm, randomBlinkRateForSpeed);
+}
+
+function suppliedSpeedForNormalized(normalized) {
+  // u=5..99 can use the first occurrence; u=100 starts at supplied speed 100.
+  return normalized === 100 ? 100 : normalized - 5;
+}
+
+function targetRateTiers(rateForSpeed) {
+  return Array.from({ length: 96 }, (_, index) => {
+    const normalized = index + 5;
+    return rateForSpeed(suppliedSpeedForNormalized(normalized));
+  });
+}
+
 // One target-rate tier for every usable normalized E1 value, u = 5..100.
 // This preserves the complete effective firmware range while keeping the UI
-// stepped. The lower supplied speed is chosen for the duplicated u=95..99
-// values created by the firmware's s<95 normalization branch.
-const E1_TARGET_RATE_TIERS = Array.from({ length: 96 }, (_, index) => {
-  const normalized = index + 5;
-  const suppliedSpeed = normalized < 95 ? normalized - 5 : normalized;
-  return blinkRateForSpeed(suppliedSpeed);
-});
+// stepped. Duplicate raw-byte values are represented by the lowest byte that
+// produces each timing, except for normalized u=100, whose first byte is 100.
+const E1_TARGET_RATE_TIERS = targetRateTiers(blinkRateForSpeed);
+const E4_TARGET_RATE_TIERS = targetRateTiers(randomBlinkRateForSpeed);
 
 export const LIGHTSTICK_ADAPTERS = [
   {
@@ -143,6 +168,10 @@ export const LIGHTSTICK_ADAPTERS = [
         description: "Let the lightstick choose each color",
         previewColor: "#c6a7ff",
         speed: { minimum: 0, maximum: 255, defaultValue: 12 },
+        targetRate: {
+          tiers: E4_TARGET_RATE_TIERS,
+          defaultValue: randomBlinkRateForSpeed(12),
+        },
         previewEffect: "rainbow-pulse",
         packet: ({ speed }) => randomColorBlink(speed),
       },
