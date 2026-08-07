@@ -266,6 +266,10 @@ export class LatencyCalibrationSession {
     this.active = false;
   }
 
+  getStream() {
+    return this.stream;
+  }
+
   setRoi(fraction) {
     this.roiFraction = Math.max(0.01, Math.min(1, fraction));
   }

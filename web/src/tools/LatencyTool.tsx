@@ -22,6 +22,14 @@ export function LatencyTool({ active, controller, notify }: {
   const cameraVideoRef = useRef<HTMLVideoElement>(null);
   const calibrationRef = useRef<any>(null);
   const calibrationGuideRef = useRef<AlignmentGuide | null>(null);
+  const calibrationDebugRef = useRef<{
+    recorder: MediaRecorder;
+    chunks: Blob[];
+    startedAt: number;
+    startedAtIso: string;
+    commands: Array<Record<string, unknown>>;
+    report?: unknown;
+  } | null>(null);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState("Ready to calibrate");
   const [report, setReport] = useState<any>(null);
@@ -77,9 +85,87 @@ export function LatencyTool({ active, controller, notify }: {
 
   async function timedWrite(packet: Uint8Array, label: string) {
     const writeStart = performance.now();
-    await sessionRef.current.sendCommand(packet, label);
+    const debug = calibrationDebugRef.current;
+    const commandEvent: Record<string, unknown> = {
+      index: debug?.commands.length ?? null,
+      label,
+      packet: [...packet],
+      sentAtMs: debug ? writeStart - debug.startedAt : null,
+    };
+    debug?.commands.push(commandEvent);
+    try {
+      await sessionRef.current.sendCommand(packet, label);
+    } catch (error) {
+      commandEvent.error = error instanceof Error ? error.message : String(error);
+      commandEvent.failedAtMs = performance.now() - (debug?.startedAt ?? writeStart);
+      throw error;
+    }
     const writeComplete = performance.now();
+    commandEvent.completedAtMs = debug ? writeComplete - debug.startedAt : null;
+    commandEvent.writeMs = writeComplete - writeStart;
     return { writeStart, writeComplete, writeMs: writeComplete - writeStart, replyAt: null, replyMs: null, replyPacket: null };
+  }
+
+  function startDebugRecording(calibration: LatencyCalibrationSession) {
+    if (calibrationDebugRef.current) return;
+    const stream = calibration.getStream();
+    if (!stream || typeof MediaRecorder === "undefined") {
+      session.addDiagnostic("WARN", "Calibration debug recording unavailable");
+      return;
+    }
+    const mimeType = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]
+      .find((candidate) => MediaRecorder.isTypeSupported(candidate));
+    try {
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const debug = {
+        recorder,
+        chunks: [] as Blob[],
+        startedAt: performance.now(),
+        startedAtIso: new Date().toISOString(),
+        commands: [] as Array<Record<string, unknown>>,
+      };
+      recorder.addEventListener("dataavailable", (event) => { if (event.data.size) debug.chunks.push(event.data); });
+      recorder.start(250);
+      calibrationDebugRef.current = debug;
+      session.addDiagnostic("SYS", "Calibration debug recording started");
+    } catch (error) {
+      session.addDiagnostic("WARN", `Calibration debug recording unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  async function stopDebugRecording() {
+    const debug = calibrationDebugRef.current;
+    if (!debug) return;
+    calibrationDebugRef.current = null;
+    await new Promise<void>((resolve) => {
+      const save = () => {
+        const finishedAt = performance.now();
+        const stamp = debug.startedAtIso.replace(/[:.]/g, "-");
+        const videoBlob = new Blob(debug.chunks, { type: debug.recorder.mimeType || "video/webm" });
+        const jsonBlob = new Blob([JSON.stringify({
+          schema: "candybong-calibration-debug",
+          version: 1,
+          recordedAt: debug.startedAtIso,
+          durationMs: finishedAt - debug.startedAt,
+          videoFile: `candybong-calibration-${stamp}.webm`,
+          commands: debug.commands,
+          report: debug.report ?? null,
+        }, null, 2)], { type: "application/json" });
+        for (const [blob, suffix] of [[videoBlob, "webm"], [jsonBlob, "json"]] as const) {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `candybong-calibration-${stamp}.${suffix}`;
+          link.click();
+          setTimeout(() => URL.revokeObjectURL(url), 0);
+        }
+        session.addDiagnostic("SYS", "Calibration debug video and command JSON saved");
+        resolve();
+      };
+      if (debug.recorder.state === "inactive") { save(); return; }
+      debug.recorder.addEventListener("stop", save, { once: true });
+      debug.recorder.stop();
+    });
   }
 
   function createCalibration() {
@@ -138,8 +224,10 @@ export function LatencyTool({ active, controller, notify }: {
     setRunning(true); setReport(null);
     setCalibrationCameraOn(true);
     calibrationGuideRef.current?.setVisible(true);
+    startDebugRecording(calibration);
     try {
       const next = await calibration.run();
+      if (calibrationDebugRef.current) calibrationDebugRef.current.report = next;
       setReport(next);
       setProgress("Calibration complete");
       session.addDiagnostic("SYS", `Automated calibration complete · ${next.global.medianSoundToLightMs ?? "no"} ms median latency`);
@@ -147,6 +235,7 @@ export function LatencyTool({ active, controller, notify }: {
       const message = error instanceof Error ? error.message : "Calibration failed";
       setProgress(message); notify(message);
     } finally {
+      await stopDebugRecording();
       setRunning(false);
       setCalibrationCameraOn(false);
       calibrationGuideRef.current?.setVisible(false);
