@@ -126,6 +126,9 @@ function targetRateTiers(rateForSpeed) {
 const E1_TARGET_RATE_TIERS = targetRateTiers(blinkRateForSpeed);
 const E4_TARGET_RATE_TIERS = targetRateTiers(randomBlinkRateForSpeed);
 
+export const BLINK_RATE_TIERS = Object.freeze([...E1_TARGET_RATE_TIERS]);
+export const RANDOM_BLINK_RATE_TIERS = Object.freeze([...E4_TARGET_RATE_TIERS]);
+
 export const LIGHTSTICK_ADAPTERS = [
   {
     id: "twice-candybong-infinity",

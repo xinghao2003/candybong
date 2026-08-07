@@ -9,12 +9,30 @@ import {
   resolvePublishedAudioUrl,
   sortCues,
 } from "./show-format.js";
+import {
+  BLINK_RATE_TIERS,
+  RANDOM_BLINK_RATE_TIERS,
+  blinkRateForSpeed,
+  blinkSpeedForRate,
+  randomBlinkRateForSpeed,
+  randomBlinkSpeedForRate,
+} from "./adapters.js";
 
 const WAVEFORM_BINS = 4000;
 const SEEK_CUE_TOLERANCE_PX = 10;
 const MIN_ZOOM_SPAN = 0.25;
 const ZOOM_STEP = 1.6;
 const ZOOM_WHEEL_STEP = 1.3;
+
+function formatRate(rate) {
+  return Number(rate).toFixed(2).replace(/\.?(0+)$/, "");
+}
+
+function closestRateTierIndex(tiers, rate) {
+  return tiers.reduce((bestIndex, tier, index) => (
+    Math.abs(tier - rate) < Math.abs(tiers[bestIndex] - rate) ? index : bestIndex
+  ), 0);
+}
 
 function downloadJson(filename, value) {
   const blob = new Blob([`${JSON.stringify(value, null, 2)}\n`], { type: "application/json" });
@@ -54,10 +72,11 @@ export class TrackStudio {
     this.zoomStart = 0;
     this.zoomEnd = 0;
     this.pointer = null;
+    this.rateTierIndex = closestRateTierIndex(BLINK_RATE_TIERS, 60);
 
     this.elements = Object.fromEntries([
       "trackFile", "showFile", "audio", "waveform", "trackName", "trackMeta", "time", "duration",
-      "status", "cueTime", "cueMode", "cueLabel", "cueColor", "cueBrightness", "cueSpeed", "cueHue",
+      "status", "cueTime", "cueMode", "cueLabel", "cueColor", "cueBrightness", "cueSpeed", "cueRate", "cueRateOutput", "cueHue",
       "cueAnimationId", "cueColorShift", "addCue", "updateCue", "deleteCue", "cueList", "cueEmpty",
       "exportShow", "clearCues", "zoomIn", "zoomOut", "zoomReset", "zoomRange", "cueOffset",
     ].map((name) => [name, root.querySelector(`[data-studio="${name}"]`)]));
@@ -99,6 +118,11 @@ export class TrackStudio {
       this.cueOffsetMs = Math.max(0, Math.min(1000, Number(elements.cueOffset.value) || 0));
     });
     elements.cueMode.addEventListener("change", () => this.updateCueFields());
+    elements.cueRate.addEventListener("input", () => {
+      this.rateTierIndex = Number(elements.cueRate.value);
+      this.updateRateDisplay();
+      this.renderTimeline();
+    });
     elements.addCue.addEventListener("click", () => this.addCue());
     elements.updateCue.addEventListener("click", () => this.updateCue());
     elements.deleteCue.addEventListener("click", () => this.deleteCue());
@@ -440,14 +464,18 @@ export class TrackStudio {
   }
 
   cueFromForm(id = createCueId()) {
+    const mode = this.elements.cueMode.value;
+    const rateTiers = mode === "randomBlink" ? RANDOM_BLINK_RATE_TIERS : BLINK_RATE_TIERS;
+    const targetRate = rateTiers[this.rateTierIndex] ?? rateTiers[0];
+    const rateSpeed = mode === "randomBlink" ? randomBlinkSpeedForRate(targetRate) : blinkSpeedForRate(targetRate);
     return normalizeCue({
       id,
       time: this.elements.cueTime.value,
-      mode: this.elements.cueMode.value,
+      mode,
       label: this.elements.cueLabel.value,
       color: this.elements.cueColor.value,
       brightness: this.elements.cueBrightness.value,
-      speed: this.elements.cueSpeed.value,
+      speed: mode === "blink" || mode === "randomBlink" ? rateSpeed : this.elements.cueSpeed.value,
       hue: this.elements.cueHue.value,
       animationId: this.elements.cueAnimationId.value,
       colorShift: this.elements.cueColorShift.value,
@@ -510,6 +538,11 @@ export class TrackStudio {
     this.elements.cueColor.value = cue.color;
     this.elements.cueBrightness.value = String(cue.brightness);
     this.elements.cueSpeed.value = String(cue.speed);
+    this.rateTierIndex = closestRateTierIndex(
+      cue.mode === "randomBlink" ? RANDOM_BLINK_RATE_TIERS : BLINK_RATE_TIERS,
+      cue.mode === "randomBlink" ? randomBlinkRateForSpeed(cue.speed) : blinkRateForSpeed(cue.speed),
+    );
+    this.elements.cueRate.value = String(this.rateTierIndex);
     this.elements.cueHue.value = String(cue.hue);
     this.elements.cueAnimationId.value = String(cue.animationId);
     this.elements.cueColorShift.value = String(cue.colorShift);
@@ -534,9 +567,33 @@ export class TrackStudio {
     });
     this.elements.cueSpeed.max = mode === "hueSpin" ? "3" : "255";
     if (mode === "hueSpin" && Number(this.elements.cueSpeed.value) > 3) this.elements.cueSpeed.value = "3";
+    if (mode === "blink" || mode === "randomBlink") {
+      const rateTiers = mode === "randomBlink" ? RANDOM_BLINK_RATE_TIERS : BLINK_RATE_TIERS;
+      this.elements.cueRate.max = String(rateTiers.length - 1);
+      this.elements.cueRate.value = String(Math.min(rateTiers.length - 1, this.rateTierIndex));
+      this.updateRateDisplay();
+    }
     const selected = Boolean(this.selectedCueId);
     this.elements.updateCue.disabled = !selected;
     this.elements.deleteCue.disabled = !selected;
+  }
+
+  updateRateDisplay() {
+    const mode = this.elements.cueMode.value;
+    const rateTiers = mode === "randomBlink" ? RANDOM_BLINK_RATE_TIERS : BLINK_RATE_TIERS;
+    const targetRate = rateTiers[this.rateTierIndex] ?? rateTiers[0];
+    const speed = mode === "randomBlink" ? randomBlinkSpeedForRate(targetRate) : blinkSpeedForRate(targetRate);
+    const progress = rateTiers.length <= 1 ? 0 : (this.rateTierIndex / (rateTiers.length - 1)) * 100;
+    this.elements.cueRate.style.setProperty("--progress", `${progress}%`);
+    this.elements.cueRateOutput.textContent = `${formatRate(targetRate)} blinks/min · speed ${speed}`;
+  }
+
+  timelineSpeedForCue(cue) {
+    if (cue.id !== this.selectedCueId || cue.mode !== "blink" || this.elements.cueMode.value !== "blink") {
+      return cue.speed;
+    }
+    const targetRate = BLINK_RATE_TIERS[this.rateTierIndex];
+    return blinkSpeedForRate(targetRate) ?? cue.speed;
   }
 
   async loadShowFile(file) {
@@ -710,6 +767,27 @@ export class TrackStudio {
     } else {
       context.fillRect(0, center - 1, rect.width, 2);
     }
+
+    // A blink cue persists until the next cue. Show each firmware-derived beat
+    // as a small dot so users can align repeated flashes with the music.
+    for (let cueIndex = 0; cueIndex < this.cues.length; cueIndex += 1) {
+      const cue = this.cues[cueIndex];
+      if (cue.mode !== "blink") continue;
+      const rate = blinkRateForSpeed(this.timelineSpeedForCue(cue));
+      if (!(rate > 0)) continue;
+      const nextCueTime = this.cues[cueIndex + 1]?.time ?? duration;
+      const period = 60 / rate;
+      context.fillStyle = cue.color;
+      for (let beatTime = cue.time; beatTime < nextCueTime - 0.0001; beatTime += period) {
+        const x = timeToX(beatTime);
+        if (x < -3 || x > rect.width + 3) continue;
+        context.globalAlpha = beatTime === cue.time ? 1 : 0.72;
+        context.beginPath();
+        context.arc(x, 12, 2.5, 0, Math.PI * 2);
+        context.fill();
+      }
+    }
+    context.globalAlpha = 1;
 
     for (const cue of this.cues) {
       const x = timeToX(cue.time);
