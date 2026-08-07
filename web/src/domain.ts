@@ -1,6 +1,6 @@
 export type ConnectionStatus = "unsupported" | "idle" | "requesting" | "connecting" | "connected" | "error";
 export type AppTab = "controller" | "tools" | "device";
-export type ToolId = "studio" | "latency" | "capture";
+export type ToolId = "studio" | "latency";
 export type DiagnosticDirection = "TX" | "RX" | "SYS" | "WARN" | "ERR";
 
 export interface AnimationDefinition {

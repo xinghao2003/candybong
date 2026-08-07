@@ -1,4 +1,4 @@
-// Shared alignment overlay for the camera labs and the capture lab: a dimmed
+// Shared alignment overlay for the camera labs: a dimmed
 // surround with a center guide circle, rendered in pure CSS (no per-frame
 // drawing), whose size and position are adjustable by gesture — drag to
 // move, pinch (or Ctrl+scroll on desktop, which trackpads deliver as

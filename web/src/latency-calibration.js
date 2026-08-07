@@ -2,12 +2,10 @@ import { captureSourceRect, createEdgeDetector } from "./camera-luma.js";
 
 export const CALIBRATION_REPETITIONS = 20;
 export const CALIBRATION_MIN_VALID_TRIALS = 15;
-export const CALIBRATION_MAX_APPLY_OFFSET_MS = 1000;
-export const CALIBRATION_REPLY_PREFIX = [0xff, 0x15, 0x03];
 
 const WHITE = "#ffffff";
 const CAMERA_WIDTH = 64;
-const CAMERA_HEIGHT = 48;
+const CAMERA_HEIGHT = 64;
 const CAMERA_ROI_FRACTION = 0.7;
 const SENSOR_WARMUP_MS = 1200;
 const TRIAL_TIMEOUT_MS = 3500;
@@ -29,84 +27,20 @@ function profile(id, label, packet, options = {}) {
   };
 }
 
-function customPacket(adapter, name, parameters) {
-  const definition = adapter.customAnimations[name];
-  if (!definition?.packet) throw new Error(`The adapter has no ${name} calibration command`);
-  return definition.packet(parameters);
-}
-
 export function createCalibrationProfiles(adapter) {
   const profiles = [
     profile(
-      "anchor.ff15",
-      "FF 15 white anchor",
-      adapter.commands.factoryColor(0x00),
-      { expectedResponse: CALIBRATION_REPLY_PREFIX },
-    ),
-    profile(
-      "solid.e6",
-      "FF E6 direct white",
+      "solid.on",
+      "Solid color on",
       adapter.commands.staticColor(WHITE, 10),
     ),
     profile(
-      "off.ff12",
-      "FF 12 off",
+      "solid.off",
+      "Solid color off",
       adapter.commands.powerOff(),
       { direction: "fall", preparation: "lit" },
     ),
   ];
-
-  const blink = adapter.customAnimations.blink;
-  const pulse = adapter.customAnimations.pulse;
-  const slowPulse = adapter.customAnimations.slowPulse;
-  const randomBlink = adapter.customAnimations.randomBlink;
-  const hueSpin = adapter.customAnimations.hueSpin;
-  const builtIn = adapter.customAnimations.builtIn;
-  const twiceShift = adapter.customAnimations.twiceShift;
-
-  profiles.push(
-    profile("blink.e1", "FF E1 blink", customPacket(adapter, "blink", {
-      color: WHITE,
-      speed: blink.speed.defaultValue,
-    })),
-    profile("pulse.e2", "FF E2 pulse", customPacket(adapter, "pulse", {
-      color: WHITE,
-      speed: pulse.speed.defaultValue,
-    })),
-    profile("slowPulse.e3", "FF E3 slow pulse", customPacket(adapter, "slowPulse", {
-      color: WHITE,
-      speed: slowPulse.speed.defaultValue,
-    })),
-    profile("randomBlink.e4", "FF E4 random blink", customPacket(adapter, "randomBlink", {
-      speed: randomBlink.speed.defaultValue,
-    })),
-    profile("hueSpin.e7", "FF E7 hue rotation", customPacket(adapter, "hueSpin", {
-      speed: hueSpin.speed.defaultValue,
-      hue: hueSpin.hue.defaultValue,
-    })),
-  );
-
-  for (let animationId = 1; animationId <= 9; animationId += 1) {
-    const isOffPattern = animationId === 3 || animationId === 7;
-    profiles.push(profile(
-      `builtIn.${animationId}`,
-      `FF 14 built-in ${animationId}`,
-      customPacket(adapter, "builtIn", {
-        animationId,
-        speed: builtIn.speed.defaultValue,
-      }),
-      isOffPattern ? { direction: "fall", preparation: "lit" } : {},
-    ));
-  }
-
-  if (twiceShift?.packet) {
-    profiles.push(profile(
-      "twiceShift.e13",
-      "FF 13 color shift",
-      customPacket(adapter, "twiceShift", { colorShift: twiceShift.colorShift.defaultValue }),
-      { preparation: "lit", direction: "change", includeInGlobal: false },
-    ));
-  }
 
   return profiles;
 }
@@ -236,37 +170,20 @@ export function buildCalibrationReport({ profiles, trialsByProfile, metadata = {
     definition,
     trialsByProfile[definition.id] || [],
   ));
-  const eligible = profileReports.filter((report) => report.eligibleForGlobal && report.stats.soundToLight.p95Ms != null);
-  const globalP95SoundToLightMs = eligible.length
-    ? Math.max(...eligible.map((report) => report.stats.soundToLight.p95Ms))
-    : null;
-  const rawRecommended = globalP95SoundToLightMs == null
-    ? null
-    : Math.ceil(Math.max(0, globalP95SoundToLightMs) / 10) * 10;
-  const recommendedCueOffsetMs = rawRecommended != null && rawRecommended <= CALIBRATION_MAX_APPLY_OFFSET_MS
-    ? rawRecommended
-    : null;
-  const warnings = [];
-  if (!eligible.length) warnings.push("No profile has enough valid trials for a global offset");
-  if (rawRecommended != null && rawRecommended > CALIBRATION_MAX_APPLY_OFFSET_MS) {
-    warnings.push(`The measured offset exceeds the ${CALIBRATION_MAX_APPLY_OFFSET_MS} ms timeline range`);
-  }
-  for (const report of profileReports) {
-    if (report.includeInGlobal && !report.eligibleForGlobal) warnings.push(`${report.label} is not eligible for the global offset`);
-  }
+  const validSoundToLight = profileReports.flatMap((report) => report.trials)
+    .filter((trial) => trial.valid && Number.isFinite(trial.soundToLightMs))
+    .map((trial) => trial.soundToLightMs);
   return {
-    schema: "candybong-latency-calibration",
+    schema: "candybong-sound-to-light-calibration",
     version: 1,
     capturedAt: new Date().toISOString(),
     metadata,
     profileReports,
     global: {
-      eligibleProfileIds: eligible.map((report) => report.id),
-      globalP95SoundToLightMs,
-      recommendedCueOffsetMs,
-      statistic: "maximum-family-p95",
+      medianSoundToLightMs: median(validSoundToLight),
+      validSampleCount: validSoundToLight.length,
+      statistic: "median",
     },
-    warnings,
   };
 }
 
@@ -328,13 +245,44 @@ export class LatencyCalibrationSession {
     if (this.pendingTrial) this.pendingTrial.resolve(null);
   }
 
-  async run() {
+  async startPreview() {
+    if (this.active) return;
     if (!this.isConnected()) throw new Error("The Candybong is not connected");
     this.cancelled = false;
     this.active = true;
-    const trialsByProfile = Object.fromEntries(this.profiles.map((definition) => [definition.id, []]));
     try {
       await this.startSensors();
+    } catch (error) {
+      await this.stopSensors();
+      this.active = false;
+      throw error;
+    }
+  }
+
+  async stopPreview() {
+    if (!this.active) return;
+    this.cancel();
+    await this.stopSensors();
+    this.active = false;
+  }
+
+  setRoi(fraction) {
+    this.roiFraction = Math.max(0.01, Math.min(1, fraction));
+  }
+
+  setPosition(positionX, positionY) {
+    this.positionX = Math.max(0, Math.min(1, positionX));
+    this.positionY = Math.max(0, Math.min(1, positionY));
+  }
+
+  async run() {
+    if (!this.isConnected()) throw new Error("The Candybong is not connected");
+    this.cancelled = false;
+    const sensorsAlreadyStarted = this.active;
+    this.active = true;
+    const trialsByProfile = Object.fromEntries(this.profiles.map((definition) => [definition.id, []]));
+    try {
+      if (!sensorsAlreadyStarted) await this.startSensors();
       await this.prepareDarkReference();
       const total = this.profiles.length * this.repetitions;
       let completed = 0;
@@ -443,11 +391,22 @@ export class LatencyCalibrationSession {
       if (sourceRect) {
         this.context.drawImage(this.video, sourceRect.sx, sourceRect.sy, sourceRect.side, sourceRect.side, 0, 0, CAMERA_WIDTH, CAMERA_HEIGHT);
         const pixels = this.context.getImageData(0, 0, CAMERA_WIDTH, CAMERA_HEIGHT).data;
+        const centerX = CAMERA_WIDTH / 2;
+        const centerY = CAMERA_HEIGHT / 2;
+        const radius = Math.min(centerX, centerY);
+        let maskedPixels = 0;
         let total = 0;
-        for (let index = 0; index < pixels.length; index += 4) {
-          total += pixels[index] * 0.2126 + pixels[index + 1] * 0.7152 + pixels[index + 2] * 0.0722;
+        for (let y = 0; y < CAMERA_HEIGHT; y += 1) {
+          for (let x = 0; x < CAMERA_WIDTH; x += 1) {
+            const dx = x + 0.5 - centerX;
+            const dy = y + 0.5 - centerY;
+            if (dx * dx + dy * dy > radius * radius) continue;
+            const index = (y * CAMERA_WIDTH + x) * 4;
+            total += pixels[index] * 0.2126 + pixels[index + 1] * 0.7152 + pixels[index + 2] * 0.0722;
+            maskedPixels += 1;
+          }
         }
-        this.latestLuma = total / (pixels.length / 4);
+        this.latestLuma = maskedPixels ? total / maskedPixels : 0;
         const cameraResult = this.cameraDetector.step(this.latestLuma, now);
         const changeResult = this.changeDetector.step(this.latestLuma, now);
         this.handleSensorEvent(cameraResult, changeResult);

@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { LIGHTSTICK_ADAPTERS } from "../src/adapters.js";
 import {
   CALIBRATION_MIN_VALID_TRIALS,
-  CALIBRATION_REPLY_PREFIX,
   buildCalibrationReport,
   createAudioImpulseDetector,
   createCalibrationProfiles,
@@ -15,14 +14,11 @@ import {
 
 test("calibration profiles cover the safe command families", () => {
   const profiles = createCalibrationProfiles(LIGHTSTICK_ADAPTERS[0]);
-  assert.equal(profiles.length, 18);
-  assert.deepEqual([...profiles[0].packet], [0xff, 0x15, 0x00, 0x00]);
-  assert.deepEqual(profiles[0].expectedResponse, CALIBRATION_REPLY_PREFIX);
-  assert.equal(profiles.find((profile) => profile.id === "off.ff12").direction, "fall");
-  assert.equal(profiles.filter((profile) => profile.id.startsWith("builtIn.")).length, 9);
-  assert.equal(profiles.find((profile) => profile.id === "builtIn.3").direction, "fall");
-  assert.equal(profiles.find((profile) => profile.id === "builtIn.7").direction, "fall");
-  assert.equal(profiles.find((profile) => profile.id === "twiceShift.e13").includeInGlobal, false);
+  assert.equal(profiles.length, 2);
+  assert.equal(profiles[0].id, "solid.on");
+  assert.equal(profiles[0].direction, "rise");
+  assert.equal(profiles[1].id, "solid.off");
+  assert.equal(profiles[1].direction, "fall");
 });
 
 test("audio impulse detector ignores baseline noise and reports one click", () => {
@@ -45,7 +41,7 @@ test("luma change detector reports a sustained change once", () => {
   assert.equal(detector.step(20, 50).edge, null);
 });
 
-test("calibration statistics use valid samples and maximum family p95", () => {
+test("calibration statistics use the median of valid sound-to-light samples", () => {
   assert.equal(percentile([10, 20, 30, 40], 0.5), 25);
   assert.equal(rms(new Float32Array([3, 4])), 3.5355339059327378);
 
@@ -82,8 +78,8 @@ test("calibration statistics use valid samples and maximum family p95", () => {
     trialsByProfile: { solid: trials, slow: slowTrials },
     metadata: { test: true },
   });
-  assert.equal(report.global.statistic, "maximum-family-p95");
-  assert.equal(report.global.globalP95SoundToLightMs, 87);
-  assert.equal(report.global.recommendedCueOffsetMs, 90);
+  assert.equal(report.global.statistic, "median");
+  assert.equal(report.global.medianSoundToLightMs, 70.5);
+  assert.equal(report.global.validSampleCount, CALIBRATION_MIN_VALID_TRIALS * 2);
   assert.deepEqual(report.metadata, { test: true });
 });

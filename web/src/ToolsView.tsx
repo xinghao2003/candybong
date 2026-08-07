@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateActio
 import { LIGHTSTICK_ADAPTERS } from "./adapters.js";
 import { BlinkLab } from "./blink-lab.js";
 import { useBluetoothSession } from "./bluetooth-session";
-import { CaptureGuide } from "./capture-guide.js";
 import { cueModeLabel } from "./show-format.js";
 import { TrackStudio } from "./track-studio.js";
 import type { ControllerState, LightstickAdapter, ToolId } from "./domain";
@@ -11,7 +10,6 @@ import { LatencyTool } from "./tools/LatencyTool";
 const TOOL_CARDS: Array<{ id: ToolId; icon: string; title: string; description: string; badge: string }> = [
   { id: "studio", icon: "♫", title: "Track Studio", description: "Build a synchronized light show for a song.", badge: "Audio" },
   { id: "latency", icon: "↯", title: "Latency Lab", description: "Measure transport, perception, and light response.", badge: "Camera + mic" },
-  { id: "capture", icon: "▣", title: "Capture Lab", description: "Capture an aligned 224 × 224 lightstick image.", badge: "Camera" },
 ];
 
 export function ToolsView({ active, activeTool, setActiveTool, controller, setController, manualControlSignal, notify }: {
@@ -40,12 +38,10 @@ export function ToolsView({ active, activeTool, setActiveTool, controller, setCo
       )}
 
       <div hidden={activeTool !== "studio"}><TrackStudioTool active={active && activeTool === "studio"} controller={controller} setController={setController} manualControlSignal={manualControlSignal} notify={notify} onReady={(instance) => { studioRef.current = instance; }} /></div>
-      <div hidden={activeTool !== "latency"}><LatencyTool active={active && activeTool === "latency"} controller={controller} notify={notify} applyStudioOffset={(offset) => studioRef.current?.setCueOffsetMs(offset)} /></div>
-      <div hidden={activeTool !== "capture"}><CaptureLabTool active={active && activeTool === "capture"} notify={notify} /></div>
+      <div hidden={activeTool !== "latency"}><LatencyTool active={active && activeTool === "latency"} controller={controller} notify={notify} /></div>
     </div>
   );
 }
-
 function TrackStudioTool({ active, controller, setController, manualControlSignal, notify, onReady }: {
   active: boolean;
   controller: ControllerState;
@@ -163,11 +159,4 @@ function BlinkLabTool({ active, controller, setController, notify }: { active: b
     }
   }, [active, session.snapshot.status]);
   return <div className="tool-content blink-tool" ref={rootRef}><div className="tool-intro"><p>Measure real blink timing through the camera and fit a speed-to-rate mapping for this lightstick.</p><span className="tool-badge" data-blinklab="status">Camera off</span></div><div className="lab-grid"><div className="card"><label className="field"><span>Blink color</span><div className="inline-color"><input data-blinklab="color" type="color" defaultValue="#ff5fa2" /><i data-blinklab="colorSwatch" /><code data-blinklab="colorHex">#FF5FA2</code></div></label><div className="range-field"><div><label>Firmware speed</label><input className="number-inline" data-blinklab="speedNumber" type="number" min="0" max="255" defaultValue="12" /></div><input data-blinklab="speed" type="range" min="0" max="255" defaultValue="12" /></div><div className="range-field"><div><label>Detection threshold</label><output data-blinklab="thresholdValue">15%</output></div><input data-blinklab="threshold" type="range" min="5" max="50" step="5" defaultValue="15" /></div><button className="primary-button wide" data-blinklab="applySpeed" type="button" disabled>Blink at speed 12</button><div className="action-row"><button className="secondary-button" data-blinklab="startCamera" type="button" disabled>Start camera</button><button className="secondary-button" data-blinklab="stopCamera" type="button" disabled>Stop</button><button className="text-button" data-blinklab="resetGuide" type="button" disabled>Reset circle</button></div></div><div className="card camera-card"><div className="camera-frame" data-blinklab="previewFrame"><video data-blinklab="preview" muted playsInline autoPlay hidden /></div><div data-blinklab="analysis" hidden><div className="signal-row"><span data-blinklab="stateDot" /><div><strong data-blinklab="signalState">Waiting for signal</strong><small data-blinklab="signalDetail">Point the camera at the lightstick</small></div></div><div className="meter"><span data-blinklab="lumaFill" /></div><output data-blinklab="lumaValue">0%</output><div data-blinklab="lumaMeter" role="meter" aria-valuemin={0} aria-valuemax={100} /><div className="stat-grid"><div><span>Blinks</span><strong data-blinklab="blinkCount">0</strong></div><div><span>Latest period</span><strong data-blinklab="latestPeriod">—</strong></div><div><span>Median rate</span><strong data-blinklab="medianRate">—</strong></div></div></div></div></div><div className="card section-card"><div className="card-heading"><div><span className="section-label">CALIBRATION SWEEP</span><h2>Fit this Candybong</h2></div><div className="action-row"><button className="primary-button small" data-blinklab="startSweep" type="button" disabled>Run sweep</button><button className="secondary-button small" data-blinklab="stopSweep" type="button" disabled>Stop</button></div></div><p data-blinklab="sweepSummary">No sweep yet</p><table data-blinklab="table" hidden><thead><tr><th>Speed</th><th>Period</th><th>Rate</th></tr></thead><tbody data-blinklab="tableBody" /></table><p data-blinklab="fitLine" /><div className="mapping-row"><span data-blinklab="mappingLabel">Mapping: built-in formula</span><button className="text-button" data-blinklab="resetMapping" type="button" disabled>Reset to default</button></div><div className="range-field"><div><label>Target blinks/min</label><output data-blinklab="targetValue">60</output></div><input data-blinklab="target" type="range" min="10" max="600" defaultValue="60" /></div><p data-blinklab="targetLine">Built-in formula: target 60 blinks/min → speed 17.</p><button className="primary-button wide" data-blinklab="applyTarget" type="button" disabled>Apply target rate</button></div></div>;
-}
-
-function CaptureLabTool({ active, notify }: { active: boolean; notify(message: string): void }) {
-  const rootRef = useRef<HTMLDivElement>(null); const instanceRef = useRef<any>(null); const session = useBluetoothSession(); const sessionRef = useRef(session); sessionRef.current = session;
-  useEffect(() => { if (!instanceRef.current && rootRef.current) instanceRef.current = new (CaptureGuide as any)({ root: rootRef.current, onDiagnostic: (direction: any, label: string, packet?: Uint8Array) => sessionRef.current.addDiagnostic(direction, label, packet), onToast: notify }); }, [notify]);
-  useEffect(() => { if (!active) instanceRef.current?.stopCamera(); }, [active]);
-  return <div className="tool-content" ref={rootRef}><div className="tool-intro"><p>Center the Candybong head inside the guide, then capture the exact aligned crop used by vision experiments.</p><span className="tool-badge" data-capture="status">Camera off</span></div><div className="capture-layout"><div className="card camera-card"><div className="camera-frame" data-capture="frame"><video data-capture="preview" muted playsInline autoPlay hidden /></div><div className="action-row"><button className="primary-button" data-capture="startCamera" type="button">Start camera</button><button className="secondary-button" data-capture="stopCamera" type="button" disabled>Stop</button><button className="secondary-button" data-capture="reset" type="button" disabled>Reset circle</button><button className="dark-button" data-capture="captureButton" type="button" disabled>Capture 224 × 224</button></div></div><div className="card capture-result"><p data-capture="resultText">No capture yet</p><canvas data-capture="resultCanvas" width="224" height="224" hidden /></div></div></div>;
 }

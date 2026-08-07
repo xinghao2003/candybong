@@ -240,13 +240,11 @@ input[type="range"]::-webkit-slider-thumb { width: 18px; height: 18px; appearanc
 .mapping-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 table { width: 100%; border-collapse: collapse; font-size: 9px; }
 th, td { padding: 8px; text-align: left; border-bottom: 1px solid var(--line); }
-.capture-layout { display: grid; grid-template-columns: 1.3fr .7fr; gap: 16px; }
-.capture-result { display: grid; min-height: 280px; place-items: center; }
-.capture-result canvas { width: min(100%,224px); border-radius: 50%; background: #eee; }
 .calibration-card { background: linear-gradient(135deg,#fff,#fff7fa); }
 .calibration-video:not([hidden]) { max-height: 340px; margin: 14px 0; border-radius: 13px; }
+.calibration-camera-frame { width: min(100%, 340px); aspect-ratio: 1; min-height: 0; margin: 14px auto; }
+.calibration-camera-frame .calibration-video { max-height: none; margin: 0; border-radius: 0; }
 .camera-mini:not([hidden]) { height: 160px; margin: 12px 0; border-radius: 11px; background: #222; }
-.tap-button.armed { animation: status-pulse .7s infinite; }
 
 .device-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px; }
 .device-identity { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 17px; }
@@ -302,7 +300,7 @@ dd { margin: 0; text-align: right; font-size: 9px; font-weight: 700; overflow-wr
   .page { width: calc(100% - 28px); padding: 29px 0 35px; }
   .page-heading { margin-bottom: 20px; }
   .page-heading h1 { font-size: 34px; }
-  .controller-hero-grid, .builder-grid, .device-grid, .studio-editor-grid, .capture-layout { grid-template-columns: 1fr; }
+  .controller-hero-grid, .builder-grid, .device-grid, .studio-editor-grid { grid-template-columns: 1fr; }
   .preview-card { min-height: 470px; }
   .effect-grid, .tool-picker { grid-template-columns: 1fr; }
   .tool-card { min-height: 88px; }
@@ -410,4 +408,3 @@ dd { margin: 0; text-align: right; font-size: 9px; font-weight: 700; overflow-wr
 [data-theme="dark"] .diagnostic-rx .diagnostic-direction { background: #1d3b2d; }
 [data-theme="dark"] .device-orb { background: linear-gradient(145deg,#4a263b,#2a2029); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12),0 8px 24px rgba(239,79,145,.12); }
 [data-theme="dark"] .meter { background: #4a3b46; }
-[data-theme="dark"] .capture-result canvas { background: #302932; }

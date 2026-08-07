@@ -1,16 +1,13 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import { captureSourceRect } from "../src/camera-luma.js";
-import { CAPTURE_SIZE } from "../src/capture-guide.js";
 
 test("captureSourceRect crops the centered square of a landscape frame", () => {
   assert.deepEqual(captureSourceRect(640, 480, 0.7), { side: 336, sx: 152, sy: 72 });
 });
-
 test("captureSourceRect crops a 16:9 frame", () => {
   assert.deepEqual(captureSourceRect(1280, 720, 0.7), { side: 504, sx: 388, sy: 108 });
 });
-
 test("captureSourceRect crops a square frame", () => {
   assert.deepEqual(captureSourceRect(480, 480, 0.7), { side: 336, sx: 72, sy: 72 });
 });
@@ -72,8 +69,4 @@ test("captureSourceRect rejects positions outside [0, 1]", () => {
   assert.throws(() => captureSourceRect(640, 480, 0.7, -0.1), RangeError);
   assert.throws(() => captureSourceRect(640, 480, 0.7, 1.1), RangeError);
   assert.throws(() => captureSourceRect(640, 480, 0.7, 0.5, NaN), RangeError);
-});
-
-test("CAPTURE_SIZE is the standard detection input size", () => {
-  assert.equal(CAPTURE_SIZE, 224);
 });

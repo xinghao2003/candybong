@@ -259,7 +259,7 @@ export class CameraLumaTracker {
 
   // The analysis region: the source square captureSourceRect computes from
   // the current ROI fraction and circle position — the same geometry the
-  // capture lab crops. Only the luma inside this region feeds the detector,
+  // selected ROI crop. Only the luma inside this region feeds the detector,
   // so background brightness outside the alignment circle is ignored.
   setRoi(fraction) {
     this.roiFraction = Math.max(0.01, Math.min(1, fraction));
