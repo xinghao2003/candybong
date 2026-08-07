@@ -58,6 +58,49 @@ const ANIMATION_KEY_BY_COMMAND: Partial<Record<CommandMode, string>> = Object.fr
   COMMAND_OPTIONS.filter((option) => option.animationKey).map((option) => [option.id, option.animationKey]),
 );
 
+const FACTORY_PALETTE = [
+  ["White", "Dahyun"],
+  ["Red", "Chaeyoung"],
+  ["Orange"],
+  ["Yellow"],
+  ["Amber", "Jihyo"],
+  ["Gold"],
+  ["Lime", "Jeongyeon"],
+  ["Chartreuse"],
+  ["Spring green"],
+  ["Green"],
+  ["Bright green"],
+  ["Emerald"],
+  ["Green cyan"],
+  ["Mint"],
+  ["Turquoise", "Mina"],
+  ["Cyan"],
+  ["Sky blue", "Nayeon"],
+  ["Azure"],
+  ["Blue", "Tzuyu"],
+  ["Royal blue"],
+  ["Deep blue"],
+  ["Violet"],
+  ["Purple"],
+  ["Electric purple"],
+  ["Magenta"],
+  ["Hot pink"],
+  ["Fuchsia"],
+  ["Pink", "Momo"],
+] as const;
+
+const FACTORY_PALETTE_HEX = [
+  "FFFFFF", "FF0000", "FF5B00", "FFFF00", "FFC800", "FFF800", "E0FF00", "A8FF00",
+  "7DFF00", "3FFF00", "00FF00", "00FF30", "00FF73", "00FFA3", "00FFE0", "00FFFF",
+  "00C9FF", "0092FF", "0062FF", "004FFF", "0000FF", "4400FF", "6F00FF", "A700FF",
+  "E600FF", "FF00F3", "FF00FB", "FF0086",
+] as const;
+
+function factoryPaletteLabel(index: number) {
+  const [colorName, member] = FACTORY_PALETTE[index];
+  return member ? `${member} · ${colorName}` : colorName;
+}
+
 function optionFor(mode: CommandMode) {
   return COMMAND_OPTIONS.find((option) => option.id === mode) || COMMAND_OPTIONS[0];
 }
@@ -203,7 +246,7 @@ export function Controller({ state, setState, onBeforeCommand, notify }: {
             {commandMode === "twiceColor" && <RangeField label="TWICE scaling" value={parameters.colorShift} minimum={1} maximum={10} output={`${parameters.colorShift} / 10`} onChange={(colorShift) => setParameters((current) => ({ ...current, colorShift }))} />}
             {commandMode === "builtIn" && definition?.animationId && <label className="field"><span>Pattern</span><select aria-label="Built-in pattern" value={parameters.animationId} onChange={(event) => selectBuiltInPattern(Number(event.target.value))}>{BUILT_IN_PATTERNS.map((pattern) => <option key={pattern.id} value={pattern.id}>{pattern.label}</option>)}</select></label>}
             {commandMode === "builtIn" && selectedBuiltInPattern?.usesSpeed && definition?.speed && <RangeField label="Firmware speed" value={parameters.speed} minimum={selectedBuiltInPattern.minimumSpeed ?? definition.speed.minimum} maximum={definition.speed.maximum} output={`${parameters.speed} / ${definition.speed.maximum}`} onChange={(speed) => setParameters((current) => ({ ...current, speed }))} />}
-            {commandMode === "palette" && <RangeField label="Palette index" value={paletteIndex} minimum={0} maximum={27} output={`0x${paletteIndex.toString(16).padStart(2, "0").toUpperCase()} / 0x1B`} onChange={setPaletteIndex} />}
+            {commandMode === "palette" && <label className="field"><span>Palette color</span><select aria-label="Palette color" value={paletteIndex} onChange={(event) => setPaletteIndex(Number(event.target.value))}>{FACTORY_PALETTE.map((_, index) => <option key={index} value={index}>{factoryPaletteLabel(index)} · #{FACTORY_PALETTE_HEX[index]}</option>)}</select></label>}
             {commandMode === "fixedPattern" && definition?.speed && <RangeField label="Rotation speed" value={parameters.speed} minimum={0} maximum={3} output={`${parameters.speed} / 3`} onChange={(speed) => setParameters((current) => ({ ...current, speed }))} />}
             {commandMode === "fixedPattern" && <RangeField label="Pattern scaling" value={parameters.hue} minimum={0} maximum={10} output={`${parameters.hue} / 10`} onChange={(hue) => setParameters((current) => ({ ...current, hue }))} />}
 
